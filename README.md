@@ -24,6 +24,8 @@ You can run the script from the terminal now, as long as you're in the virtual e
 
 The easier method is to use a quick action in the Finder. Choose a workflow from the workflows directory, **right click it and open with Automator.** Change `/path/to/duplicates.command` to the absolute path on your system (you can drag the file into Automator to get that easily). Now save and quit Automator, then double-click the workflow to install it.
 
+I've included workflows for Terminal.app and Alacritty. It should be pretty straightforward to make workflows for other popular terminal emulators, if you're so inclined.
+
 # Clickable links
 
 You need Keyboard Maestro for the links to reveal files in the Finder. You also need to be running one of [these terminal emulators](https://github.com/Alhadis/OSC8-Adoption/), which unfortunately does not include Terminal.app (yet.) The macro I use looks like this:
