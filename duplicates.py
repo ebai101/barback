@@ -124,6 +124,7 @@ def weighted_similarity(audio_files):
 
 def filename_to_link(filename):
     label = os.path.basename(filename)
+    # Replace the UUID here with your own (see README.md)
     uri = "kmtrigger://macro=B7271B0E-F479-434F-986A-C688A41E144A&value={}".format(
         urllib.parse.quote(filename, safe="")
     )
