@@ -4,7 +4,7 @@ Scans a directory for duplicate audio files. Uses a weighted average of the zero
 
 https://github.com/ebai101/audio-duplicates/assets/11427711/c5024cd2-13ab-44bf-be08-dc78e389527b
 
-Requires Python 3.10. Clickable links require Keyboard Maestro, and a terminal that supports them (Terminal.app does not, as far as I can tell)
+Requires Python 3.10. Clickable links require Keyboard Maestro, and a terminal that supports them (not Terminal.app).
 
 # Usage
 
@@ -26,7 +26,7 @@ The easier method is to use a quick action in the Finder. Choose a workflow from
 
 # Clickable links
 
-You need Keyboard Maestro for the links to reveal files in the Finder. The macro I use looks like this:
+You need Keyboard Maestro for the links to reveal files in the Finder. You also need to be running one of [these terminal emulators](https://github.com/Alhadis/OSC8-Adoption/), which unfortunately does not include Terminal.app (yet.) The macro I use looks like this:
 
 ![image](https://github.com/ebai101/audio-duplicates/assets/11427711/5b0ce0c9-b41f-4559-bbe5-f6fe23f00942)
 
