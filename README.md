@@ -23,3 +23,11 @@ You can run the script from the terminal now, as long as you're in the virtual e
 ```
 
 The easier method is to use a quick action in the Finder. Choose a workflow from the workflows directory, **right click it and open with Automator.** Change `/path/to/duplicates.command` to the absolute path on your system (you can drag the file into Automator to get that easily). Now save and quit Automator, then double-click the workflow to install it.
+
+# Clickable links
+
+You need Keyboard Maestro for the links to reveal files in the Finder. The macro I use looks like this:
+
+![image](https://github.com/ebai101/audio-duplicates/assets/11427711/5b0ce0c9-b41f-4559-bbe5-f6fe23f00942)
+
+The macro must be enabled globally and must be able to be triggered by URL. You want to copy the UUID of your specific macro (the highlighted text in the above image) and replace the UUID on line 128 of `duplicates.py` with your own UUID.
