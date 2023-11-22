@@ -146,10 +146,7 @@ def main():
     result = [
         r
         for r in tqdm(
-            Parallel(return_as="generator", n_jobs=-1)(
-                delayed(weighted_similarity)([audios[c[0]], audios[c[1]]])
-                for c in combinations
-            ),
+            [weighted_similarity((audios[c[0]], audios[c[1]])) for c in combinations],
             total=len(combinations),
             desc="Processing",
         )
