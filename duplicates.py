@@ -73,7 +73,7 @@ def load_files(audio_dir):
     audios = [
         audio
         for audio in tqdm(
-            Parallel(return_as="generator", n_jobs=8)(
+            Parallel(return_as="generator", n_jobs=-1)(
                 delayed(AudioFile)(file) for file in files
             ),
             total=len(files),
@@ -146,7 +146,7 @@ def main():
     result = [
         r
         for r in tqdm(
-            Parallel(return_as="generator", n_jobs=8)(
+            Parallel(return_as="generator", n_jobs=-1)(
                 delayed(weighted_similarity)([audios[c[0]], audios[c[1]]])
                 for c in combinations
             ),
