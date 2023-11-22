@@ -51,7 +51,7 @@
 				<key>ActionParameters</key>
 				<dict>
 					<key>source</key>
-					<string>on run {input, parameters}		set p to POSIX path of input	tell application "Terminal"		activate		do script "/path/to/duplicates.command " &amp; quoted form of p	end tell		return inputend run</string>
+					<string>on run {input, parameters}		set p to POSIX path of input	tell application "Terminal"		activate		do script "/path/to/duplicates.command" &amp; " " &amp; quoted form of p	end tell		return inputend run</string>
 				</dict>
 				<key>BundleIdentifier</key>
 				<string>com.apple.Automator.RunScript</string>
