@@ -70,6 +70,8 @@ def load_files(audio_dir):
         logging.error("must specify a directory")
         return None
 
+    # this is actually hindered by joblib parallelization, so it's disabled for now
+    # probably due to internal librosa caching/memoization
     audios = [
         audio
         for audio in tqdm(
