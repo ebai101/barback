@@ -129,7 +129,7 @@ def validate_audio_files(audio_dir):
     return files
 
 
-def find_loops_main(audio_files):
+def check_loops(audio_files):
     # preprocessing
     audios = [
         r
@@ -165,7 +165,7 @@ def find_loops_main(audio_files):
     print(tabulate(loops, headers=["file", "is_loop", "bpm", "num_bars"]))
 
 
-def find_duplicates_main(audio_files):
+def find_duplicates(audio_files):
     # preprocessing
     def _preproc(f):
         warnings.filterwarnings("ignore", category=UserWarning, module="librosa")
@@ -246,9 +246,11 @@ if __name__ == "__main__":
 
     audio_files = validate_audio_files(audio_dir)
     if action == "duplicates":
-        find_duplicates_main(audio_files)
+        print(f"Finding duplicates for {audio_dir}")
+        find_duplicates(audio_files)
     elif action == "loops":
-        find_loops_main(audio_files)
+        print(f"Checking loops for {audio_dir}")
+        check_loops(audio_files)
 
     end_time = time.time() - start_time
     print(f"done in {end_time} sec")
