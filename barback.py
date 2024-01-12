@@ -13,6 +13,9 @@ import numpy as np
 from tqdm import tqdm
 from tabulate import tabulate
 from joblib import Parallel, delayed
+from watchdog.observers import Observer
+from watchdog.events import PatternMatchingEventHandler
+from watchdog.events import DirModifiedEvent
 
 
 class AudioFile:
@@ -235,15 +238,9 @@ def find_duplicates(audio_files):
         print(tabulate(possible_dupes, headers=["file 1", "file 2", "similarity"]))
 
 
-if __name__ == "__main__":
-    if len(sys.argv) < 3:
-        print("specify an action and a folder")
-        sys.exit(1)
-    action = sys.argv[1]
-    audio_dir = os.path.abspath(sys.argv[2])
-
+def main(action, audio_dir):
     start_time = time.time()
-
+    os.system("cls" if os.name == "nt" else "clear")
     audio_files = validate_audio_files(audio_dir)
     if action == "duplicates":
         print(f"Finding duplicates for {audio_dir}")
@@ -251,6 +248,43 @@ if __name__ == "__main__":
     elif action == "loops":
         print(f"Checking loops for {audio_dir}")
         check_loops(audio_files)
-
     end_time = time.time() - start_time
     print(f"done in {end_time} sec")
+
+
+class WatchdogHandler(PatternMatchingEventHandler):
+    def __init__(self):
+        super(WatchdogHandler, self).__init__(
+            patterns=("*.mp3", "*.flac", "*.wav", "*.aif", "*.aiff")
+        )
+
+    def on_moved(self, event):
+        if not ".tmp" in event.dest_path and not "RX Temp Save File" in event.dest_path:
+            main(action, audio_dir)
+
+    def on_modified(self, event):
+        main(action, audio_dir)
+
+
+if __name__ == "__main__":
+    if len(sys.argv) < 3:
+        print("specify an action and a folder")
+        sys.exit(1)
+    action = sys.argv[1]
+    audio_dir = os.path.abspath(sys.argv[2])
+
+    # run once
+    main(action, audio_dir)
+
+    # rerun on file changes
+    event_handler = WatchdogHandler()
+    observer = Observer()
+    observer.schedule(event_handler, audio_dir, recursive=True)
+    observer.start()
+    try:
+        while True:
+            time.sleep(1)
+    except KeyboardInterrupt:
+        observer.stop()
+    finally:
+        observer.join()
