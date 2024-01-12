@@ -93,7 +93,7 @@ class AudioFile:
         remainder = self.audio.shape[0] % bar_len_samples
         if self.audio.shape[0] < (num_bars * bar_len_samples):
             remainder = self.audio.shape[0] - (num_bars * bar_len_samples)
-        is_loopable = -1.0 < remainder < 1.0
+        is_loopable = -1.0 <= remainder <= 1.0
 
         if is_loopable:
             return self, "yes", bpm, num_bars
