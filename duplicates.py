@@ -121,7 +121,9 @@ def weighted_similarity(audio_files):
 
     result = (zcr_similarity + chroma_similarity + normalized_spectral_similarity) / 3
 
-    return (audio_files[0].filename, audio_files[1].filename, result)
+    s = (audio_files[0].filename, audio_files[1].filename, result)
+    print(s)
+    return s
 
 
 def filename_to_link(filename):
