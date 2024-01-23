@@ -6,6 +6,7 @@ import urllib
 import librosa
 import numpy as np
 import pywt
+import soundfile as sf
 
 
 # applies fades of a given type
@@ -20,7 +21,6 @@ def fade(buf, fade_dir, fade_type):
             fade = 0.5 * np.cos(np.pi * np.linspace(1, 0, len(buf))) + 0.5
         case _:
             raise ValueError("unsupported fade_type")
-            sys.exit(1)
 
     if fade_dir == "out":
         return buf * fade[::-1]
@@ -28,7 +28,7 @@ def fade(buf, fade_dir, fade_type):
 
 
 class AudioFile:
-    def __init__(self, filename, sample_rate=22050):
+    def __init__(self, filename, sample_rate=22050, mono=True):
         self.filename = filename
         self.sample_rate = sample_rate
         self.zero_crossings = None
@@ -36,7 +36,7 @@ class AudioFile:
         self.spectral_contrast = None
 
         try:
-            self.audio, _ = librosa.load(self.filename, sr=self.sample_rate)
+            self.audio, _ = librosa.load(self.filename, sr=self.sample_rate, mono=mono)
         except FileNotFoundError as e:
             logging.error(f"Error loading file: {e}")
         except Exception as e:
@@ -144,17 +144,24 @@ class AudioFile:
             if np.max(np.abs(detail)) < threshold:
                 logging.info(f"fl of {fl} samples is long enough to prevent a click")
 
-                # fade left channel
-                self.audio[0][-fl:] = fade(self.audio[0][-fl:], "out", "cosine")
-                self.audio[0][:fl] = fade(self.audio[0][:fl], "in", "cosine")
-
-                # fade right channel if file is stereo
-                if 0 <= 1 < len(self.audio):
+                # if stereo, fade both channels
+                if len(self.audio.shape) > 1:
+                    self.audio[0][-fl:] = fade(self.audio[0][-fl:], "out", "cosine")
+                    self.audio[0][:fl] = fade(self.audio[0][:fl], "in", "cosine")
                     self.audio[1][-fl:] = fade(self.audio[1][-fl:], "out", "cosine")
                     self.audio[1][:fl] = fade(self.audio[1][:fl], "in", "cosine")
+                else:
+                    self.audio[-fl:] = fade(self.audio[-fl:], "out", "cosine")
+                    self.audio[:fl] = fade(self.audio[:fl], "in", "cosine")
                 return
 
         logging.info("no suitable fl found")
+
+    def save(self):
+        if len(self.audio.shape) > 1:
+            sf.write(self.filename, self.audio.T, self.sample_rate, subtype="PCM_24")
+        else:
+            sf.write(self.filename, self.audio, self.sample_rate, subtype="PCM_24")
 
     def filename_to_link(self):
         label = os.path.basename(self.filename)
