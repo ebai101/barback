@@ -1,17 +1,19 @@
 #!/usr/bin/env python3
 
+import itertools
+import logging
 import os
 import sys
 import time
-import logging
 import warnings
-import itertools
-from tqdm import tqdm
-from tabulate import tabulate
-from audio_file import AudioFile
+
 from joblib import Parallel, delayed
-from watchdog.observers import Observer
+from tabulate import tabulate
+from tqdm import tqdm
 from watchdog.events import PatternMatchingEventHandler
+from watchdog.observers import Observer
+
+from audio_file import AudioFile
 
 
 # finds valid audio files in a directory

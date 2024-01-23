@@ -1,7 +1,8 @@
-import re
-import os
-import urllib
 import logging
+import os
+import re
+import urllib
+
 import librosa
 import numpy as np
 
