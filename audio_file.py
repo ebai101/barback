@@ -28,15 +28,18 @@ def fade(buf, fade_dir, fade_type):
 
 
 class AudioFile:
-    def __init__(self, filename, sample_rate=22050, mono=True):
+    def __init__(self, filename, sample_rate=22050, mono=True, bpm=120):
         self.filename = filename
         self.sample_rate = sample_rate
         self.zero_crossings = None
         self.chroma = None
         self.spectral_contrast = None
+        self.bpm = bpm
 
         try:
-            self.audio, _ = librosa.load(self.filename, sr=self.sample_rate, mono=mono)
+            self.audio, sr = librosa.load(self.filename, sr=self.sample_rate, mono=mono)
+            if self.sample_rate == None:
+                self.sample_rate = sr
         except FileNotFoundError as e:
             logging.error(f"Error loading file: {e}")
         except Exception as e:
@@ -52,6 +55,12 @@ class AudioFile:
 
     def calc_spectral_contrast(self):
         return librosa.feature.spectral_contrast(y=self.audio, sr=self.sample_rate)
+
+    def calc_first_onset(self):
+        onsets = librosa.onset.onset_detect(
+            y=librosa.to_mono(self.audio), sr=self.sample_rate, units="samples"
+        )
+        return onsets[0]
 
     def weighted_similarity(self, target):
         # zero crossing
@@ -111,6 +120,26 @@ class AudioFile:
             return self, "yes", bpm, num_bars
         else:
             return self, "no", bpm, num_bars
+
+    def extend(self, infer=False):
+        bar_len_samples = round(self.sample_rate * ((60 / self.bpm) * 4.0))
+        print(f"Bar length: {bar_len_samples}")
+        print(f"First onset location: {self.first_onset}")
+        if bar_len_samples < self.first_onset:
+            new_bar_len = bar_len_samples
+            while new_bar_len < self.first_onset:
+                new_bar_len += bar_len_samples
+            bar_len_samples = new_bar_len
+
+        pad_len = bar_len_samples - self.first_onset
+        print(f"Padding audio with {pad_len} samples")
+        new_audio = np.ndarray(
+            shape=(self.audio.shape[0], self.audio.shape[1] + pad_len), dtype=float
+        )
+        for i in range(new_audio.shape[0]):
+            new_audio[i] = np.pad(self.audio[i], (pad_len, 0), "constant")
+        self.audio = new_audio
+        self.save()
 
     # perform smart fades on an audio object
     def smart_fade(self, threshold=0.02):

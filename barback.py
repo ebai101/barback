@@ -142,7 +142,48 @@ def find_duplicates(audio_files):
         print(tabulate(possible_dupes, headers=["file 1", "file 2", "similarity"]))
 
 
-def main(action, audio_dir):
+def extend(audio_files, bpm):
+    # preprocessing
+    def _preproc(f):
+        warnings.filterwarnings("ignore", category=UserWarning, module="librosa")
+        a = AudioFile(f, sample_rate=None, mono=False, bpm=int(bpm))
+        a.first_onset = a.calc_first_onset()
+        return a
+
+    audios = [
+        r
+        for r in tqdm(
+            Parallel(return_as="generator", n_jobs=-1)(
+                delayed(_preproc)(f) for f in audio_files
+            ),
+            total=len(audio_files),
+            desc="Preprocessing",
+        )
+    ]
+
+    def _proc(a):
+        if bpm == "infer":
+            a.extend(infer=True)
+        else:
+            a.extend()
+
+    for a in audios:
+        _proc(a)
+    # [
+    #     r
+    #     for r in tqdm(
+    #         Parallel(return_as="generator", n_jobs=-1)(
+    #             delayed(_proc)(a) for a in audios
+    #         ),
+    #         total=len(audios),
+    #         desc="Extending audio files",
+    #     )
+    # ]
+    print("done")
+    sys.exit(0)
+
+
+def main(action, audio_dir, bpm=120):
     start_time = time.time()
     os.system("cls" if os.name == "nt" else "clear")
     audio_files = find_valid_audio_files(audio_dir)
@@ -152,6 +193,9 @@ def main(action, audio_dir):
     elif action == "loops":
         print(f"Checking loops for {audio_dir}")
         check_loops(audio_files)
+    elif action == "extend":
+        print(f"Extending samples in {audio_dir} with bpm {bpm}")
+        extend(audio_files, bpm)
     end_time = time.time() - start_time
     print(f"done in {end_time} sec")
 
@@ -176,9 +220,14 @@ if __name__ == "__main__":
         sys.exit(1)
     action = sys.argv[1]
     audio_dir = os.path.abspath(sys.argv[2])
-
-    # run once
-    main(action, audio_dir)
+    if action == "extend":
+        if len(sys.argv) < 4:
+            print("specify an action, folder and bpm")
+            sys.exit(1)
+        bpm = sys.argv[3]
+        main(action, audio_dir, bpm)
+    else:
+        main(action, audio_dir)
 
     # rerun on file changes
     event_handler = WatchdogHandler()
