@@ -121,6 +121,23 @@ class AudioFile:
         else:
             return self, "no", bpm, num_bars
 
+    def start_end_zero_crossing(self, threshold=0.02):
+        if len(self.audio.shape) > 1:
+            start_non_zero = any(abs(s) > threshold for s in self.audio[0])
+            end_non_zero = any(abs(s) > threshold for s in self.audio[-1])
+        else:
+            start_non_zero = abs(self.audio[0]) > threshold
+            end_non_zero = abs(self.audio[-1]) > threshold
+
+        if start_non_zero and end_non_zero:
+            return "start,end"
+        elif start_non_zero:
+            return "start"
+        elif end_non_zero:
+            return "end"
+        else:
+            return ""
+
     def extend(self, infer=False):
         bar_len_samples = round(self.sample_rate * ((60 / self.bpm) * 4.0))
         print(f"Bar length: {bar_len_samples}")

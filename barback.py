@@ -6,12 +6,14 @@ import os
 import sys
 import time
 import warnings
+import select
 
 from joblib import Parallel, delayed
 from tabulate import tabulate
 from tqdm import tqdm
 from watchdog.events import PatternMatchingEventHandler
 from watchdog.observers import Observer
+from simple_colors import *
 
 from audio_file import AudioFile
 
@@ -51,9 +53,11 @@ def check_loops(audio_files):
 
     # check for loops
     def _proc(a):
-        res = a.is_loop()
+        file, is_loop, bpm, num_bars = a.is_loop()
+        zc = a.start_end_zero_crossing()
+
         # print(res)
-        return res
+        return file, is_loop, bpm, num_bars, zc
 
     result = [
         r
@@ -66,10 +70,15 @@ def check_loops(audio_files):
         )
     ]
     loops = sorted(
-        [(r[0].filename_to_link(), r[1], r[2], r[3]) for r in result if r[1]],
+        [[r[0].filename_to_link(), r[1], r[2], r[3], r[4]] for r in result if r[1]],
         key=lambda x: x[0],
     )
-    print(tabulate(loops, headers=["file", "is_loop", "bpm", "num_bars"]))
+
+    print(
+        colorized_loop_table(
+            loops, headers=["file", "is_loop", "bpm", "num_bars", "zero_crossings"]
+        )
+    )
 
 
 def find_duplicates(audio_files):
@@ -183,6 +192,21 @@ def extend(audio_files, bpm):
     sys.exit(0)
 
 
+def colorized_loop_table(data, headers):
+    colored_data = []
+    for row in data:
+        if row[1] == "no" or row[1] == "no bpm found":
+            colored_row = [red(str(cell)) for cell in row]
+        elif row[4] != "":
+            colored_row = [yellow(str(cell)) for cell in row]
+        elif row[3] % 2 != 0:
+            colored_row = [cyan(str(cell)) for cell in row]
+        else:
+            colored_row = [str(cell) for cell in row]
+        colored_data.append(colored_row)
+    return tabulate(colored_data, headers=headers)
+
+
 def main(action, audio_dir, bpm=120):
     start_time = time.time()
     os.system("cls" if os.name == "nt" else "clear")
@@ -236,7 +260,13 @@ if __name__ == "__main__":
     observer.start()
     try:
         while True:
-            time.sleep(1)
+            if select.select([sys.stdin], [], [], 0.1)[0]:
+                user_input = ""
+                if user_input == "":
+                    main(action, audio_dir)
+                while select.select([sys.stdin], [], [], 0)[0]:
+                    sys.stdin.readline()
+            time.sleep(0.1)
     except KeyboardInterrupt:
         observer.stop()
     finally:

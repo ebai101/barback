@@ -2,3 +2,4 @@
 cd $(dirname "$0")
 source venv/bin/activate
 python3 barback.py "$1" "$2" "$3"
+read -n 1
