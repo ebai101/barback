@@ -40,3 +40,17 @@ end run
 ```
 
 save as Check Loops. create another one called Find Duplicates with the same command, replacing "loops" with "duplicates"
+
+## reveal links
+
+you need Keyboard Maestro and a terminal that supports links - apple terminal does NOT support them [(list of supported terminals)](https://github.com/Alhadis/OSC8-Adoption/)
+
+create a global macro with one Reveal File action, set the value to %TriggerValue%
+
+right click the macro, copy as UUID
+
+change the UUID in audio_file.py to the one you copied, eg:
+
+```
+uri = "kmtrigger://macro=YOURUUIDGOESHERE&value={}".format(
+```
