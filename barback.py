@@ -195,7 +195,7 @@ def extend(audio_files, bpm):
 def colorized_loop_table(data, headers):
     colored_data = []
     for row in data:
-        if row[1] == "no" or row[1] == "no bpm found":
+        if "no" in row[1] or row[1] == "no bpm found":
             colored_row = [red(str(cell)) for cell in row]
         elif row[4] != "":
             colored_row = [yellow(str(cell)) for cell in row]

@@ -98,7 +98,7 @@ class AudioFile:
 
     # returns a boolean (loopable/not loopable) and an error message if no BPM is found
     def is_loop(self):
-        # find bpm - return if none found
+        # find bpm - return early if none found
         bpm_regex = re.search("([6-9][0-9](?![0-9])|[1-2][0-9][0-9])", self.filename)
         if bpm_regex is None:
             return self, "no bpm found", "", ""
@@ -107,19 +107,24 @@ class AudioFile:
 
         # calculate samples/bar (assuming 4 beats/bar) and number of bars
         bar_len_samples = self.sample_rate * ((60 / bpm) * 4.0)
-        num_bars = self.audio.shape[0] / bar_len_samples
-        num_bars = round(num_bars)  # ideal bar length
+        total_samples = self.audio.shape[0]
+        num_bars = total_samples / bar_len_samples
+        num_bars_rounded = round(num_bars)  # ideal bar length
 
-        # sample is considered loopable if the remainder is within a whole sample
-        remainder = self.audio.shape[0] % bar_len_samples
-        if self.audio.shape[0] < (num_bars * bar_len_samples):
-            remainder = self.audio.shape[0] - (num_bars * bar_len_samples)
-        is_loopable = -1.0 <= remainder <= 1.0
+        # check the file length against the expected value
+        expected_samples = num_bars_rounded * bar_len_samples
+        difference = abs(total_samples - expected_samples)
+        is_loopable = difference <= 1.0
 
         if is_loopable:
-            return self, "yes", bpm, num_bars
+            return self, "yes", bpm, num_bars_rounded
         else:
-            return self, "no", bpm, num_bars
+            return (
+                self,
+                f"no (off by {difference:.2f} samples)",
+                bpm,
+                num_bars_rounded,
+            )
 
     def start_end_zero_crossing(self, threshold=0.02):
         if len(self.audio.shape) > 1:
