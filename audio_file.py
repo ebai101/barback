@@ -9,6 +9,10 @@ import pywt
 import soundfile as sf
 
 
+# set to false to disable filename links if using a terminal that does not support them
+create_filename_links = True
+
+
 # applies fades of a given type
 def fade(buf, fade_dir, fade_type):
     if fade_dir not in ["in", "out"]:
@@ -216,6 +220,8 @@ class AudioFile:
 
     def filename_to_link(self):
         label = os.path.basename(self.filename)
+        if not create_filename_links:
+            return label
         # Replace the UUID here with your own (see README.md)
         uri = "kmtrigger://macro=B7271B0E-F479-434F-986A-C688A41E144A&value={}".format(
             urllib.parse.quote(self.filename, safe="")
