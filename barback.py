@@ -20,13 +20,15 @@ from audio_file import AudioFile
 
 # finds valid audio files in a directory
 def find_valid_audio_files(audio_dir):
-    valid_extensions = (".mp3", ".flac", ".wav", ".aif")
+    valid_extensions = (".mp3", ".flac", ".wav", ".aif", ".aiff")
+
     if os.path.isdir(audio_dir):
         try:
             files = [
-                os.path.join(audio_dir, f)
-                for f in os.listdir(audio_dir)
-                if f.endswith(valid_extensions)
+                os.path.join(root, file)
+                for root, _, files in os.walk(audio_dir)
+                for file in files
+                if file.lower().endswith(valid_extensions)
             ]
         except FileNotFoundError as e:
             logging.error(f"Error opening file: {e}")
