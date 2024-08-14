@@ -8,7 +8,6 @@ import numpy as np
 import pywt
 import soundfile as sf
 
-
 # set to false to disable filename links if using a terminal that does not support them
 create_filename_links = True
 
@@ -130,7 +129,7 @@ class AudioFile:
                 num_bars_rounded,
             )
 
-    def start_end_zero_crossing(self, threshold=0.02):
+    def get_start_end_zero_crossing(self, threshold=0.02):
         if len(self.audio.shape) > 1:
             start_non_zero = any(abs(s) > threshold for s in self.audio[0])
             end_non_zero = any(abs(s) > threshold for s in self.audio[-1])
@@ -211,6 +210,22 @@ class AudioFile:
                 return
 
         logging.info("no suitable fl found")
+
+    def get_start_end_silence(self):
+        audio_mono = librosa.to_mono(self.audio)
+        audio_mono_trim, index = librosa.effects.trim(audio_mono, top_db=75)
+        if librosa.get_duration(
+            y=audio_mono, sr=self.sample_rate
+        ) == librosa.get_duration(y=audio_mono_trim, sr=self.sample_rate):
+            return 0, 0
+        else:
+            start = 0
+            end = 0
+            if index[0] > 0:
+                start = index[0]
+            if index[1] != len(audio_mono):
+                end = len(audio_mono) - index[1]
+            return start, end
 
     def save(self):
         if len(self.audio.shape) > 1:

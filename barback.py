@@ -3,17 +3,17 @@
 import itertools
 import logging
 import os
+import select
 import sys
 import time
 import warnings
-import select
 
 from joblib import Parallel, delayed
+from simple_colors import *
 from tabulate import tabulate
 from tqdm import tqdm
 from watchdog.events import PatternMatchingEventHandler
 from watchdog.observers import Observer
-from simple_colors import *
 
 from audio_file import AudioFile
 
@@ -56,7 +56,7 @@ def check_loops(audio_files):
     # check for loops
     def _proc(a):
         file, is_loop, bpm, num_bars = a.is_loop()
-        zc = a.start_end_zero_crossing()
+        zc = a.get_start_end_zero_crossing()
 
         # print(res)
         return file, is_loop, bpm, num_bars, zc
@@ -194,6 +194,114 @@ def extend(audio_files, bpm):
     sys.exit(0)
 
 
+def final_check(audio_files):
+    import audio_file_checks
+
+    print("Before running this:")
+    print("- ensure all files are named to spec")
+    print("- ensure all folders are properly organized")
+    print("- ensure all loops have a BPM")
+    print("- ensure all tonal loops have a key signature")
+
+    # preprocessing
+    def _preproc(f):
+        warnings.filterwarnings("ignore", category=UserWarning, module="librosa")
+        a = AudioFile(f)
+        return a
+
+    audios = [
+        r
+        for r in tqdm(
+            Parallel(return_as="generator", n_jobs=-1)(
+                delayed(_preproc)(f) for f in audio_files
+            ),
+            total=len(audio_files),
+            desc="Preprocessing",
+        )
+    ]
+
+    # wav, 44.1, 24 bit
+    sr_bd_results = [
+        r
+        for r in tqdm(
+            Parallel(return_as="generator", n_jobs=-1)(
+                delayed(audio_file_checks.check_file_sr_bd)(c) for c in audios
+            ),
+            total=len(audios),
+            desc="Checking sample rate and bit depth",
+        )
+        if r != ""
+    ]
+
+    # no extra silence at start/end
+    silence_results = [
+        r
+        for r in tqdm(
+            Parallel(return_as="generator", n_jobs=-1)(
+                delayed(audio_file_checks.check_silence)(c) for c in audios
+            ),
+            total=len(audios),
+            desc="Checking for start/end silence",
+        )
+        if r != ""
+    ]
+
+    # all the loops are loopy
+    loop_results = [
+        r
+        for r in tqdm(
+            Parallel(return_as="generator", n_jobs=-1)(
+                delayed(audio_file_checks.check_loops)(c) for c in audios
+            ),
+            total=len(audios),
+            desc="Checking loops",
+        )
+        if r != ""
+    ]
+
+    # no clicks/pops at start/end
+    zc_results = [
+        r
+        for r in tqdm(
+            Parallel(return_as="generator", n_jobs=-1)(
+                delayed(audio_file_checks.check_start_end_zero_crossing)(c)
+                for c in audios
+            ),
+            total=len(audios),
+            desc="Checking zero crossings at start/end",
+        )
+        if r != ""
+    ]
+
+    # normalized to -1dB
+    # norm_results = [
+    #     r
+    #     for r in tqdm(
+    #         Parallel(return_as="generator", n_jobs=-1)(
+    #             delayed(audio_file_checks.check_normalization)(c) for c in audios
+    #         ),
+    #         total=len(audios),
+    #         desc="Checking normalization",
+    #     )
+    # ]
+
+    if len(sr_bd_results) > 0:
+        print(cyan("Samplerate/bit depth issues:"))
+        [print(r) for r in sr_bd_results if r != ""]
+
+    if len(silence_results) > 0:
+        print(cyan("Silence issues:"))
+        [print(r) for r in silence_results if r != ""]
+
+    if len(loop_results) > 0:
+        print(cyan("Loop issues:"))
+        [print(r) for r in loop_results if r != ""]
+
+    if len(zc_results) > 0:
+        print(cyan("Start/end zero crossing issues:"))
+        [print(r) for r in zc_results if r != ""]
+
+
 def colorized_loop_table(data, headers):
     colored_data = []
     for row in data:
@@ -222,6 +330,9 @@ def main(action, audio_dir, bpm=120):
     elif action == "extend":
         print(f"Extending samples in {audio_dir} with bpm {bpm}")
         extend(audio_files, bpm)
+    elif action == "finalcheck":
+        print(f"Doing a final check for {audio_dir}")
+        final_check(audio_files)
     end_time = time.time() - start_time
     print(f"done in {end_time} sec")
 
