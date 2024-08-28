@@ -180,16 +180,7 @@ def extend(audio_files, bpm):
 
     for a in audios:
         _proc(a)
-    # [
-    #     r
-    #     for r in tqdm(
-    #         Parallel(return_as="generator", n_jobs=-1)(
-    #             delayed(_proc)(a) for a in audios
-    #         ),
-    #         total=len(audios),
-    #         desc="Extending audio files",
-    #     )
-    # ]
+
     print("done")
     sys.exit(0)
 
@@ -200,8 +191,6 @@ def final_check(audio_files):
     print("Before running this:")
     print("- ensure all files are named to spec")
     print("- ensure all folders are properly organized")
-    print("- ensure all loops have a BPM")
-    print("- ensure all tonal loops have a key signature")
 
     # preprocessing
     def _preproc(f):
@@ -259,6 +248,33 @@ def final_check(audio_files):
         if r != ""
     ]
 
+    # all loops have bpm
+    bpm_results = [
+        r
+        for r in tqdm(
+            Parallel(return_as="generator", n_jobs=-1)(
+                delayed(audio_file_checks.check_loop_bpm)(c) for c in audios
+            ),
+            total=len(audios),
+            desc="Checking for BPM in loops",
+        )
+        if r != ""
+    ]
+
+    # tonal loops have key signature
+    key_sig_results = [
+        r
+        for r in tqdm(
+            Parallel(return_as="generator", n_jobs=-1)(
+                delayed(audio_file_checks.check_tonal_loop_key_signature)(c)
+                for c in audios
+            ),
+            total=len(audios),
+            desc="Checking for key signatures in tonal loops",
+        )
+        if r != ""
+    ]
+
     # no clicks/pops at start/end
     zc_results = [
         r
@@ -273,32 +289,28 @@ def final_check(audio_files):
         if r != ""
     ]
 
-    # normalized to -1dB
-    # norm_results = [
-    #     r
-    #     for r in tqdm(
-    #         Parallel(return_as="generator", n_jobs=-1)(
-    #             delayed(audio_file_checks.check_normalization)(c) for c in audios
-    #         ),
-    #         total=len(audios),
-    #         desc="Checking normalization",
-    #     )
-    # ]
-
     if len(sr_bd_results) > 0:
-        print(cyan("Samplerate/bit depth issues:"))
+        print(cyan(f"Samplerate/bit depth issues ({len(sr_bd_results)}):"))
         [print(r) for r in sr_bd_results if r != ""]
 
     if len(silence_results) > 0:
-        print(cyan("Silence issues:"))
+        print(cyan(f"Silence issues ({len(silence_results)}):"))
         [print(r) for r in silence_results if r != ""]
 
     if len(loop_results) > 0:
-        print(cyan("Loop issues:"))
+        print(cyan(f"Loop issues ({len(loop_results)}):"))
         [print(r) for r in loop_results if r != ""]
 
+    if len(bpm_results) > 0:
+        print(cyan(f"BPM issues ({len(bpm_results)}):"))
+        [print(r) for r in bpm_results if r != ""]
+
+    if len(key_sig_results) > 0:
+        print(cyan(f"Key signature issues ({len(key_sig_results)}):"))
+        [print(r) for r in key_sig_results if r != ""]
+
     if len(zc_results) > 0:
-        print(cyan("Start/end zero crossing issues:"))
+        print(cyan(f"Start/end zero crossing issues ({len(zc_results)}):"))
         [print(r) for r in zc_results if r != ""]
 
 

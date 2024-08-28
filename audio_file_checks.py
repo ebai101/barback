@@ -1,4 +1,5 @@
 import os
+import re
 
 import librosa
 import numpy as np
@@ -59,11 +60,21 @@ def check_loops(af: audio_file.AudioFile):
     return ""
 
 
-# normalized to -1dB
-# def check_normalization(af: audio_file.AudioFile, tolerance=0.1):
-#     audio_db = librosa.amplitude_to_db(np.abs(af.audio), ref=np.max)
-#     peak_db = np.max(audio_db)
-#     if not abs(peak_db + 1) <= tolerance:
-#         return f"File {af.filename_to_link()} peaks at {peak_db}"
+# loops have bpm
+def check_loop_bpm(af: audio_file.AudioFile):
+    if not "loops" in af.filename:
+        return ""
+    loop_bpm_regex = r"^(?:.*?_)?[A-Z]+[A-Z][a-zA-Z]*_\d+(?:_.*)?$"
+    if not re.match(loop_bpm_regex, os.path.basename(af.filename)):
+        return f"File {af.filename_to_link()} does not have a BPM but is a loop"
+    return ""
 
-#     return ""
+
+# tonal loops have key signature
+def check_tonal_loop_key_signature(af: audio_file.AudioFile):
+    if not "loops" in af.filename:
+        return ""
+    key_sig_regex = r"^.*_[A-G](?:#|b)?(?:maj|min)?(?:\.wav)?$"
+    if not re.match(key_sig_regex, os.path.basename(af.filename)):
+        return f"File {af.filename_to_link()} does not have a key signature but is a tonal loop"
+    return ""
