@@ -101,12 +101,17 @@ class AudioFile:
 
     # returns a boolean (loopable/not loopable) and an error message if no BPM is found
     def is_loop(self):
-        # find bpm - return early if none found
-        bpm_regex = re.search("([6-9][0-9](?![0-9])|[1-2][0-9][0-9])", self.filename)
-        if bpm_regex is None:
-            return self, "no bpm found", "", ""
+        # find bpm - return early if no valid bpm found
+        bpm_regex = r"^(?:.*?_)?[A-Z]+[A-Z][a-zA-Z]*_(\d+)(?:_.*)?$"
+        bpm_match = re.match(bpm_regex, os.path.basename(self.filename))
+        if bpm_match:
+            number = int(bpm_match.group(1))
+            if 60 <= number <= 299:
+                bpm = number
+            else:
+                return self, "bpm out of range", "", ""
         else:
-            bpm = int(bpm_regex.group(0))
+            return self, "no bpm found", "", ""
 
         # calculate samples/bar (assuming 4 beats/bar) and number of bars
         bar_len_samples = self.sample_rate * ((60 / bpm) * 4.0)

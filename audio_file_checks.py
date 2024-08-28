@@ -2,7 +2,6 @@ import os
 import re
 
 import librosa
-import numpy as np
 import soundfile as sf
 
 import audio_file
@@ -35,6 +34,8 @@ def check_silence(af: audio_file.AudioFile):
     start, end = af.get_start_end_silence()
     if start >= 22050:
         return f"File {af.filename_to_link()} has {start} samples at the start"
+    if not "loops" in af.filename and start >= 500:  # tighter restriction on one shots
+        return f"File {af.filename_to_link()} has {start} samples at the start"
     if end >= 22050:
         return f"File {af.filename_to_link()} has {end} samples at the end"
 
@@ -57,16 +58,6 @@ def check_loops(af: audio_file.AudioFile):
     file, is_loop, bpm, num_bars = af.is_loop()
     if not "yes" in is_loop:
         return f"File {af.filename_to_link()} does not loop"
-    return ""
-
-
-# loops have bpm
-def check_loop_bpm(af: audio_file.AudioFile):
-    if not "loops" in af.filename:
-        return ""
-    loop_bpm_regex = r"^(?:.*?_)?[A-Z]+[A-Z][a-zA-Z]*_\d+(?:_.*)?$"
-    if not re.match(loop_bpm_regex, os.path.basename(af.filename)):
-        return f"File {af.filename_to_link()} does not have a BPM but is a loop"
     return ""
 
 

@@ -248,19 +248,6 @@ def final_check(audio_files):
         if r != ""
     ]
 
-    # all loops have bpm
-    bpm_results = [
-        r
-        for r in tqdm(
-            Parallel(return_as="generator", n_jobs=-1)(
-                delayed(audio_file_checks.check_loop_bpm)(c) for c in audios
-            ),
-            total=len(audios),
-            desc="Checking for BPM in loops",
-        )
-        if r != ""
-    ]
-
     # tonal loops have key signature
     key_sig_results = [
         r
@@ -301,10 +288,6 @@ def final_check(audio_files):
         print(cyan(f"Loop issues ({len(loop_results)}):"))
         [print(r) for r in loop_results if r != ""]
 
-    if len(bpm_results) > 0:
-        print(cyan(f"BPM issues ({len(bpm_results)}):"))
-        [print(r) for r in bpm_results if r != ""]
-
     if len(key_sig_results) > 0:
         print(cyan(f"Key signature issues ({len(key_sig_results)}):"))
         [print(r) for r in key_sig_results if r != ""]
@@ -317,7 +300,7 @@ def final_check(audio_files):
 def colorized_loop_table(data, headers):
     colored_data = []
     for row in data:
-        if "no" in row[1] or row[1] == "no bpm found":
+        if not "yes" in row[1]:
             colored_row = [red(str(cell)) for cell in row]
         elif row[4] != "":
             colored_row = [yellow(str(cell)) for cell in row]
