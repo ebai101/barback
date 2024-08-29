@@ -316,6 +316,9 @@ def main(action, audio_dir, bpm=120):
     start_time = time.time()
     os.system("cls" if os.name == "nt" else "clear")
     audio_files = find_valid_audio_files(audio_dir)
+    if audio_files == None:
+        sys.exit(1)
+
     if action == "duplicates":
         print(f"Finding duplicates for {audio_dir}")
         find_duplicates(audio_files)
