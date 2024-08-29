@@ -364,7 +364,7 @@ if __name__ == "__main__":
     else:
         main(action, audio_dir)
 
-    # rerun on file changes
+    # rerun on file changes or enter press
     event_handler = WatchdogHandler()
     observer = Observer()
     observer.schedule(event_handler, audio_dir, recursive=True)
@@ -372,9 +372,7 @@ if __name__ == "__main__":
     try:
         while True:
             if select.select([sys.stdin], [], [], 0.1)[0]:
-                user_input = ""
-                if user_input == "":
-                    main(action, audio_dir)
+                main(action, audio_dir)
                 while select.select([sys.stdin], [], [], 0)[0]:
                     sys.stdin.readline()
             time.sleep(0.1)
