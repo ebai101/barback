@@ -32,14 +32,20 @@ def check_file_sr_bd(af: audio_file.AudioFile):
 # no extra silence at start/end
 def check_silence(af: audio_file.AudioFile):
     start, end = af.get_start_end_silence()
-    if start >= 22050:
-        return f"File {af.filename_to_link()} has {start} samples at the start"
+    result = []
     if not "loops" in af.filename and start >= 500:  # tighter restriction on one shots
-        return f"File {af.filename_to_link()} has {start} samples at the start"
+        result.append(f"File {af.filename_to_link()} has {start} samples at the start")
+    elif start >= 22050:
+        result.append(f"File {af.filename_to_link()} has {start} samples at the start")
     if end >= 22050:
-        return f"File {af.filename_to_link()} has {end} samples at the end"
+        result.append(f"File {af.filename_to_link()} has {end} samples at the end")
 
-    return ""
+    if len(result) == 0:
+        return ""
+    elif len(result) == 1:
+        return result[0]
+    else:
+        return "\n".join(result)
 
 
 # no clicks/pops at start/end
@@ -63,9 +69,19 @@ def check_loops(af: audio_file.AudioFile):
 
 # tonal loops have key signature
 def check_tonal_loop_key_signature(af: audio_file.AudioFile):
-    if not "loops" in af.filename:
+
+    # first check if there are multiple key signatures
+    key_sig_regex = r"_[A-G][b#]?(maj|min)?"
+    key_sig_matches = re.findall(key_sig_regex, os.path.basename(af.filename))
+    if len(key_sig_matches) > 1:
+        return f"File {af.filename_to_link()} has multiple key signatures"
+
+    # then, if the file is a loop, check that the key signature is at the end
+    if not "loops" in af.filename.lower():
         return ""
-    key_sig_regex = r"^.*_[A-G](?:#|b)?(?:maj|min)?(?:\.wav)?$"
-    if not re.match(key_sig_regex, os.path.basename(af.filename)):
+    key_sig_at_end_regex = r"^.*_[A-G](?:#|b)?(?:maj|min)?(?:\.wav)?$"
+    if not re.match(key_sig_at_end_regex, os.path.basename(af.filename)) and not any(
+        s in af.filename.lower() for s in ["drum", "perc", "hihat"]
+    ):
         return f"File {af.filename_to_link()} does not have a key signature but is a tonal loop"
     return ""

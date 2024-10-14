@@ -6,6 +6,7 @@ import os
 import select
 import sys
 import time
+import urllib
 import warnings
 
 from joblib import Parallel, delayed
@@ -16,6 +17,17 @@ from watchdog.events import PatternMatchingEventHandler
 from watchdog.observers import Observer
 
 from audio_file import AudioFile
+
+
+def open_in_rx_link(label, filenames):
+    if len(filenames) == 0:
+        logging.error("open_in_rx_link received an empty filename list")
+        return
+
+    uri = "kmtrigger://macro=79D7F9AF-3E50-4F43-A602-4BE82B07240D"
+    for fn in filenames:
+        uri.append("&value={}".format(urllib.parse.quote(fn, safe="")))
+    return f"\033]8;;{uri}\033\\{label}\033]8;;\033\\"
 
 
 # finds valid audio files in a directory
@@ -276,6 +288,8 @@ def final_check(audio_files):
         if r != ""
     ]
 
+    # open_in_rx_names = []
+
     if len(sr_bd_results) > 0:
         print(cyan(f"Samplerate/bit depth issues ({len(sr_bd_results)}):"))
         [print(r) for r in sr_bd_results if r != ""]
@@ -283,6 +297,7 @@ def final_check(audio_files):
     if len(silence_results) > 0:
         print(cyan(f"Silence issues ({len(silence_results)}):"))
         [print(r) for r in silence_results if r != ""]
+        # open_in_rx_names.append(open_in_rx_link("silence"))
 
     if len(loop_results) > 0:
         print(cyan(f"Loop issues ({len(loop_results)}):"))
@@ -295,6 +310,11 @@ def final_check(audio_files):
     if len(zc_results) > 0:
         print(cyan(f"Start/end zero crossing issues ({len(zc_results)}):"))
         [print(r) for r in zc_results if r != ""]
+        # open_in_rx_names.append("zero crossing")
+
+    # if len(open_in_rx_names) > 0:
+    #     line = "open in rx: "
+    #     print(f"open in rx: ")
 
 
 def colorized_loop_table(data, headers):
@@ -342,10 +362,12 @@ class WatchdogHandler(PatternMatchingEventHandler):
         )
 
     def on_moved(self, event):
+        return
         if not ".tmp" in event.dest_path and not "RX Temp Save File" in event.dest_path:
             main(action, audio_dir)
 
     def on_modified(self, event):
+        return
         main(action, audio_dir)
 
 
