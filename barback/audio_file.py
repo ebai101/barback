@@ -5,11 +5,10 @@ import urllib
 
 import librosa
 import numpy as np
-import pywt
 import soundfile as sf
 
 # set to false to disable filename links if using a terminal that does not support them
-create_filename_links = True
+create_filename_links = False
 
 
 # applies fades of a given type
@@ -31,7 +30,7 @@ def fade(buf, fade_dir, fade_type):
 
 
 class AudioFile:
-    def __init__(self, filename, sample_rate=22050, mono=True, bpm=120):
+    def __init__(self, filename, sample_rate=None, mono=True, bpm=120):
         self.filename = filename
         self.sample_rate = sample_rate
         self.zero_crossings = None
@@ -49,6 +48,9 @@ class AudioFile:
             logging.error(
                 f"Unexpected error loading file {filename}: {type(e).__name__}, {e}"
             )
+
+    def __str__(self):
+        return os.path.basename(self.filename)
 
     def calc_zero_crossings(self):
         return np.mean(np.abs(np.diff(np.sign(self.audio))) > 0)
@@ -170,51 +172,6 @@ class AudioFile:
             new_audio[i] = np.pad(self.audio[i], (pad_len, 0), "constant")
         self.audio = new_audio
         self.save()
-
-    # perform smart fades on an audio object
-    def smart_fade(self, threshold=0.02):
-        audio_mono = librosa.to_mono(self.audio)
-        test_len = 512  # length of the testing buffer
-        test_c = int(test_len / 2)  # center index of the testing buffer
-        fade_array = 2 ** np.arange(1, 9, 1)  # 2-256, each value is double the last
-
-        for fl in fade_array:
-            # test buffer is last test_c samples + first test_c samples
-            test_buf = np.concatenate((audio_mono[-test_c:], audio_mono[:test_c]))
-
-            # apply fade out and fade in
-            test_buf[test_c - fl : test_c] = fade(
-                test_buf[test_c - fl : test_c], "out", "cosine"
-            )
-            test_buf[test_c : test_c + fl] = fade(
-                test_buf[test_c : test_c + fl], "in", "cosine"
-            )
-
-            cA, cD2, cD1 = pywt.wavedec(
-                librosa.util.normalize(test_buf), "db1", level=2
-            )  # wavelet decomposition
-            detail = cD2[
-                int(len(cD2) * 3 / 8) : int(len(cD2) * 5 / 8)
-            ]  # only the center of the 2nd level is of interest
-            detail *= librosa.filters.get_window(
-                "parzen", len(detail)
-            )  # window to avoid false positives on the edges
-
-            if np.max(np.abs(detail)) < threshold:
-                logging.info(f"fl of {fl} samples is long enough to prevent a click")
-
-                # if stereo, fade both channels
-                if len(self.audio.shape) > 1:
-                    self.audio[0][-fl:] = fade(self.audio[0][-fl:], "out", "cosine")
-                    self.audio[0][:fl] = fade(self.audio[0][:fl], "in", "cosine")
-                    self.audio[1][-fl:] = fade(self.audio[1][-fl:], "out", "cosine")
-                    self.audio[1][:fl] = fade(self.audio[1][:fl], "in", "cosine")
-                else:
-                    self.audio[-fl:] = fade(self.audio[-fl:], "out", "cosine")
-                    self.audio[:fl] = fade(self.audio[:fl], "in", "cosine")
-                return
-
-        logging.info("no suitable fl found")
 
     def get_start_end_silence(self):
         audio_mono = librosa.to_mono(self.audio)

@@ -1,0 +1,11 @@
+#main_container {
+    layout: horizontal;
+}
+
+#table {
+    width: 70%;
+}
+
+#tree {
+    width: 30%;
+}
