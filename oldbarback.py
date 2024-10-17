@@ -198,7 +198,7 @@ def extend(audio_files, bpm):
 
 
 def final_check(audio_files):
-    import audio_file_checks
+    import final_checks
 
     print("Before running this:")
     print("- ensure all files are named to spec")
@@ -226,7 +226,7 @@ def final_check(audio_files):
         r
         for r in tqdm(
             Parallel(return_as="generator", n_jobs=-1)(
-                delayed(audio_file_checks.check_file_sr_bd)(c) for c in audios
+                delayed(final_checks.check_file_sr_bd)(c) for c in audios
             ),
             total=len(audios),
             desc="Checking sample rate and bit depth",
@@ -239,7 +239,7 @@ def final_check(audio_files):
         r
         for r in tqdm(
             Parallel(return_as="generator", n_jobs=-1)(
-                delayed(audio_file_checks.check_silence)(c) for c in audios
+                delayed(final_checks.check_silence)(c) for c in audios
             ),
             total=len(audios),
             desc="Checking for start/end silence",
@@ -252,7 +252,7 @@ def final_check(audio_files):
         r
         for r in tqdm(
             Parallel(return_as="generator", n_jobs=-1)(
-                delayed(audio_file_checks.check_loops)(c) for c in audios
+                delayed(final_checks.check_loops)(c) for c in audios
             ),
             total=len(audios),
             desc="Checking loops",
@@ -265,8 +265,7 @@ def final_check(audio_files):
         r
         for r in tqdm(
             Parallel(return_as="generator", n_jobs=-1)(
-                delayed(audio_file_checks.check_tonal_loop_key_signature)(c)
-                for c in audios
+                delayed(final_checks.check_tonal_loop_key_signature)(c) for c in audios
             ),
             total=len(audios),
             desc="Checking for key signatures in tonal loops",
@@ -279,8 +278,7 @@ def final_check(audio_files):
         r
         for r in tqdm(
             Parallel(return_as="generator", n_jobs=-1)(
-                delayed(audio_file_checks.check_start_end_zero_crossing)(c)
-                for c in audios
+                delayed(final_checks.check_start_end_zero_crossing)(c) for c in audios
             ),
             total=len(audios),
             desc="Checking zero crossings at start/end",

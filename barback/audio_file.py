@@ -41,7 +41,7 @@ class AudioFile:
 
         try:
             self.audio, sr = librosa.load(self.filename, sr=self.sample_rate, mono=mono)
-            if self.sample_rate == None:
+            if self.sample_rate is None:
                 self.sample_rate = sr
         except FileNotFoundError as e:
             logging.error(f"Error loading file: {e}")

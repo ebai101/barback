@@ -33,7 +33,7 @@ def check_file_sr_bd(af: audio_file.AudioFile):
 def check_silence(af: audio_file.AudioFile):
     start, end = af.get_start_end_silence()
     result = []
-    if not "loops" in af.filename and start >= 500:  # tighter restriction on one shots
+    if "loops" not in af.filename and start >= 500:  # tighter restriction on one shots
         result.append(f"File {af.filename_to_link()} has {start} samples at the start")
     elif start >= 22050:
         result.append(f"File {af.filename_to_link()} has {start} samples at the start")
@@ -59,17 +59,16 @@ def check_start_end_zero_crossing(af: audio_file.AudioFile):
 
 # loops are proper loops
 def check_loops(af: audio_file.AudioFile):
-    if not "loops" in af.filename:
+    if "loops" not in af.filename:
         return ""
     file, is_loop, bpm, num_bars = af.is_loop()
-    if not "yes" in is_loop:
+    if "yes" not in is_loop:
         return f"File {af.filename_to_link()} does not loop"
     return ""
 
 
 # tonal loops have key signature
 def check_tonal_loop_key_signature(af: audio_file.AudioFile):
-
     # first check if there are multiple key signatures
     key_sig_regex = r"_[A-G][b#]?(maj|min)?"
     key_sig_matches = re.findall(key_sig_regex, os.path.basename(af.filename))
@@ -77,7 +76,7 @@ def check_tonal_loop_key_signature(af: audio_file.AudioFile):
         return f"File {af.filename_to_link()} has multiple key signatures"
 
     # then, if the file is a loop, check that the key signature is at the end
-    if not "loops" in af.filename.lower():
+    if "loops" not in af.filename.lower():
         return ""
     key_sig_at_end_regex = r"^.*_[A-G](?:#|b)?(?:maj|min)?(?:\.wav)?$"
     if not re.match(key_sig_at_end_regex, os.path.basename(af.filename)) and not any(
