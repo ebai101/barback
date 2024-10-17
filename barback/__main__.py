@@ -1,5 +1,5 @@
 import asyncio
-import os
+import subprocess
 import sys
 from concurrent.futures import ProcessPoolExecutor
 from multiprocessing import cpu_count
@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Iterable
 
 import audio_file
+import checks
 import pandas as pd
 from textual import work
 from textual.app import App, ComposeResult
@@ -14,8 +15,6 @@ from textual.binding import Binding
 from textual.containers import Container
 from textual.widgets import DirectoryTree, Footer, Header, ProgressBar, Static
 from textual_pandas.widgets import DataFrameTable
-
-import barback
 
 
 class FileTable(DataFrameTable):
@@ -38,8 +37,9 @@ class FileTree(DirectoryTree):
 class Barback(App):
     BINDINGS = [
         Binding("q", "quit", "Quit", show=False, priority=True),
-        Binding("x", "open_in_rx", "Open in RX"),
-        Binding("r", "open_in_reason", "Open in Reason"),
+        Binding("x", "open_in_rx", "RX"),
+        Binding("r", "open_in_reason", "Reason"),
+        Binding("f", "open_in_finder", "Finder"),
         Binding("L", "check_loops", "Check Loops"),
         Binding("D", "find_duplicates", "Find Duplicates"),
         Binding("F", "final_check", "Final Check"),
@@ -49,33 +49,68 @@ class Barback(App):
     def __init__(self, audio_dir):
         super().__init__()
         self.executor = ProcessPoolExecutor(max_workers=cpu_count())
-        self.audio_dir = audio_dir
-        self.data = pd.DataFrame(columns=["File", "Loop", "BPM", "Bars", "ZC"])
+        self.audio_dir = Path(audio_dir)
+        self.data = pd.DataFrame()
         self.loaded = False
 
     def action_check_loops(self) -> None:
-        self.query_one("#message").update("Checking loops")
+        self.query_one("#info").update("Checking loops")
         self.check_loops()
 
     def action_open_in_rx(self) -> None:
         table = self.query_one("#table")
         selected_row = table.cursor_row
-        if selected_row:
-            self.query_one("#message").update(
-                f"Opening {table.get_row_at(selected_row)[0]} in RX"
-            )
+        af = table.get_row_at(selected_row)[0]
+        self.query_one("#info").update(f"Opening {af.filename} in RX")
+        subprocess.call(["open", "-a", "iZotope RX 10 Audio Editor", str(af.filename)])
 
     def action_open_in_reason(self) -> None:
         table = self.query_one("#table")
         selected_row = table.cursor_row
-        if selected_row:
-            self.query_one("#message").update(
-                f"Opening {table.get_row_at(selected_row)[0]} in Reason"
-            )
+        af = table.get_row_at(selected_row)[0]
+        self.query_one("#info").update(f"Opening {af.filename} in Reason")
+        subprocess.call(
+            [
+                "/Applications/Keyboard Maestro.app/Contents/MacOS/keyboardmaestro",
+                "D66BA3D1-E83A-4A96-878F-29DC4D7D8B85",
+                "--parameter",
+                f"{af.filename}",
+            ]
+        )
+
+    def action_open_in_finder(self) -> None:
+        table = self.query_one("#table")
+        selected_row = table.cursor_row
+        af = table.get_row_at(selected_row)[0]
+        self.query_one("#info").update(f"Revealing {af.filename} in Finder")
+        subprocess.call(
+            [
+                "/Applications/Keyboard Maestro.app/Contents/MacOS/keyboardmaestro",
+                "B7271B0E-F479-434F-986A-C688A41E144A",
+                "--parameter",
+                f"{af.filename}",
+            ]
+        )
 
     def on_tree_node_highlighted(self, message: FileTree.NodeHighlighted) -> None:
-        if self.loaded:
-            self.query_one("#message").update(f"Tree node {message.node} highlighted")
+        if not self.loaded:
+            return
+        table = self.query_one("#table")
+        info = self.query_one("#info")
+
+        info.update(f"Tree node {message.node.data.path} highlighted")
+        if message.node.is_root:
+            table.update_df(self.data)
+        else:
+            path = message.node.data.path
+            info.update(f"Tree node {path} highlighted")
+            subset = self.data[
+                self.data.apply(
+                    lambda row: str(path) in str(row["File"].filename), axis=1
+                )
+            ]
+            table.update_df(subset)
+        table.focus()
 
     @work
     async def check_loops(self):
@@ -87,7 +122,7 @@ class Barback(App):
 
         async def _proc(file):
             loop = asyncio.get_event_loop()
-            result = await loop.run_in_executor(self.executor, barback.check_loop, file)
+            result = await loop.run_in_executor(self.executor, checks.check_loop, file)
             progress_bar.advance(1)
             return result
 
@@ -98,31 +133,30 @@ class Barback(App):
             results, columns=["File", "Is Loop", "BPM", "#Bars", "ZC"]
         )
         self.query_one("#table").update_df(self.data)
-        self.query_one("#message").update("Done checking loops")
+        self.query_one("#info").update("Done checking loops")
 
     @work
     async def load_audio_files(self):
-        message = self.query_one("#message")
+        info = self.query_one("#info")
         table = self.query_one("#table")
         progress_bar = self.query_one("#progress")
 
         valid_extensions = (".mp3", ".flac", ".wav", ".aif", ".aiff")
-        if os.path.isdir(self.audio_dir):
+        if self.audio_dir.is_dir():
             files = [
-                os.path.join(root, file)
-                for root, _, files in os.walk(self.audio_dir)
-                for file in files
-                if file.lower().endswith(valid_extensions)
+                file.absolute()
+                for file in self.audio_dir.rglob("*")
+                if file.is_file() and file.suffix.lower() in valid_extensions
             ]
             if not files:
-                message.update("No valid audio files found in the directory")
+                info.update("No valid audio files found in the directory")
                 return
         else:
-            message.update("Must specify a valid directory")
+            info.update("Must specify a valid directory")
             return
 
         tasks_remaining = len(files)
-        message.update(f"Loading {len(files)} audio files from {self.audio_dir}")
+        info.update(f"Loading {len(files)} audio files from {self.audio_dir}")
         progress_bar.update(total=tasks_remaining, progress=0)
 
         async def _proc(file):
@@ -138,7 +172,7 @@ class Barback(App):
 
         self.data = pd.DataFrame(results, columns=["File"])
         table.update_df(self.data)
-        message.update(
+        info.update(
             f"Finished loading {len(self.data)} audio files from {self.audio_dir}"
         )
         self.loaded = True
@@ -152,7 +186,7 @@ class Barback(App):
 
     def compose(self) -> ComposeResult:
         yield Header()
-        yield Static(id="message")
+        yield Static(id="info")
         yield ProgressBar(total=100, id="progress")
         yield Container(
             FileTable(id="table"),

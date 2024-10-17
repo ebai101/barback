@@ -1,10 +1,16 @@
 import os
 import re
 
+import audio_file
 import librosa
 import soundfile as sf
 
-import audio_file
+
+def check_loop(af: audio_file.AudioFile):
+    file, is_loop, bpm, num_bars = af.is_loop()
+    zc = af.get_start_end_zero_crossing()
+
+    return file, is_loop, bpm, num_bars, zc
 
 
 # wav, 44.1, 24 bit
