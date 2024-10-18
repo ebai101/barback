@@ -13,6 +13,23 @@ def check_loop(af: audio_file.AudioFile):
     return file, is_loop, bpm, num_bars, zc
 
 
+def find_duplicates_preproc(af: audio_file.AudioFile):
+    af.zero_crossings = af.calc_zero_crossings()
+    af.chroma = af.calc_chroma()
+    af.spectral_contrast = af.calc_spectral_contrast()
+    return af
+
+
+def find_duplicates(afA: audio_file.AudioFile, afB: audio_file.AudioFile):
+    try:
+        if abs(afA.duration - afB.duration) > 0.1:
+            return afA, afB, 0
+    except TypeError:
+        return afA, afB, 0
+    s = afA.weighted_similarity(afB)
+    return s  # afA, afB, similarity
+
+
 # wav, 44.1, 24 bit
 def check_file_sr_bd(af: audio_file.AudioFile):
     extension = os.path.splitext(af.filename)[1].lower()

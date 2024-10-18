@@ -1,11 +1,30 @@
-#main_container {
+#head {
+    layout: grid;
+    grid-size: 2 3;
+    height: 3;
+}
+
+#mode-switcher {
     layout: horizontal;
+    align: right top;
+    width: 100%;
+    height: auto;
+    row-span: 3;
+}
+
+.mode-button {
+    padding: 0;
+}
+
+#rule {
+    margin: 0;
 }
 
 #table {
-    width: 70%;
+    width: 100%;
 }
 
 #tree {
+    dock: right;
     width: 30%;
 }
