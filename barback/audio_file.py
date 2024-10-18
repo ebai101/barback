@@ -33,6 +33,8 @@ class AudioFile:
     def __init__(self, filename, sample_rate=None, mono=True, bpm=120):
         self.filename = filename
         self.sample_rate = sample_rate
+        self.bit_depth = sf.info(self.filename).subtype
+        self.duration = librosa.get_duration(path=self.filename)
         self.zero_crossings = None
         self.chroma = None
         self.spectral_contrast = None
@@ -204,3 +206,29 @@ class AudioFile:
             urllib.parse.quote(self.filename, safe="")
         )
         return f"\033]8;;{uri}\033\\{label}\033]8;;\033\\"
+
+    def _get_sort_key(self):
+        filename = str(self.filename.name)
+        match = re.search(r"^(?:.*?_)?[A-Z]+[A-Z][a-zA-Z]*_(\d+)(?:_.*)?$", filename)
+        if match:
+            return (0, int(match.group(1)))
+        else:
+            return (1, filename)
+
+    def __lt__(self, other):
+        return self._get_sort_key() < other._get_sort_key()
+
+    def __gt__(self, other):
+        return self._get_sort_key() > other._get_sort_key()
+
+    def __eq__(self, other):
+        return self._get_sort_key() == other._get_sort_key()
+
+    def __le__(self, other):
+        return self._get_sort_key() <= other._get_sort_key()
+
+    def __ge__(self, other):
+        return self._get_sort_key() >= other._get_sort_key()
+
+    def __ne__(self, other):
+        return self._get_sort_key() != other._get_sort_key()
