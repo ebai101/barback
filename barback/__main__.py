@@ -29,9 +29,20 @@ class FileTable(DataTable):
         Binding("k", "cursor_up", "Cursor up", show=False),
     ]
 
+    def __init__(self, id=""):
+        super().__init__(id=id)
+        self.selected_dir = None
+
     def add_df(self, df: pd.DataFrame):
         """Add DataFrame data to DataTable."""
         self.df = df
+        if self.selected_dir:
+            self.df = self.df[
+                self.df.apply(
+                    lambda row: str(self.selected_dir) in str(row["File"].filename),
+                    axis=1,
+                )
+            ]
         self.add_columns(*self._add_df_columns())
         self.add_rows(self._add_df_rows()[0:])
         return self
@@ -127,24 +138,16 @@ class Barback(App):
         )
 
     def on_tree_node_highlighted(self, message: FileTree.NodeHighlighted) -> None:
-        if not self.loaded:
-            return
         table = self.query_one("#table")
-        info = self.query_one("#info")
 
-        info.update(f"Tree node {message.node.data.path} highlighted")
         if message.node.is_root:
-            table.update_df(self.data)
+            table.selected_dir = None
         else:
-            path = message.node.data.path
-            info.update(f"Tree node {path} highlighted")
-            subset = self.data[
-                self.data.apply(
-                    lambda row: str(path) in str(row["File"].filename), axis=1
-                )
-            ]
-            table.update_df(subset)
-        table.focus()
+            table.selected_dir = message.node.data.path
+
+        if self.loaded:
+            table.update_df(self.data)
+            table.focus()
 
     @work
     async def check_loops(self):
