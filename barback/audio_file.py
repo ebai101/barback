@@ -1,7 +1,6 @@
 import logging
 import os
 import re
-import urllib
 
 import librosa
 import numpy as np
@@ -30,46 +29,61 @@ def fade(buf, fade_dir, fade_type):
 
 
 class AudioFile:
-    def __init__(self, filename, sample_rate=None, mono=True, bpm=120):
+    class AudioFileError(Exception):
+        def __init__(self, filename):
+            super().__init__(filename)
+
+    def __init__(self, filename):
         self.filename = filename
-        self.sample_rate = sample_rate
+        self.sample_rate = librosa.get_samplerate(self.filename)
         self.bit_depth = sf.info(self.filename).subtype
         self.duration = librosa.get_duration(path=self.filename)
         self.zero_crossings = None
         self.chroma = None
         self.spectral_contrast = None
-        self.bpm = bpm
+        self.load(sample_rate=self.sample_rate, mono=True)
 
+    def load(self, sample_rate=None, mono=False):
         try:
-            self.audio, sr = librosa.load(self.filename, sr=self.sample_rate, mono=mono)
-            if self.sample_rate is None:
-                self.sample_rate = sr
-        except FileNotFoundError as e:
-            logging.error(f"Error loading file: {e}")
+            if sample_rate is None:
+                sample_rate = self.sample_rate
+            self.audio, sr = librosa.load(self.filename, sr=sample_rate, mono=mono)
         except Exception as e:
             logging.error(
-                f"Unexpected error loading file {filename}: {type(e).__name__}, {e}"
+                f"Unexpected error loading file {self.filename}: {type(e).__name__}, {e}"
             )
 
     def __str__(self):
         return os.path.basename(self.filename)
 
     def calc_zero_crossings(self):
+        if not self.audio:
+            raise self.AudioFileError(f"{self.filename} is not loaded")
         return np.mean(np.abs(np.diff(np.sign(self.audio))) > 0)
 
     def calc_chroma(self):
+        if not self.audio:
+            raise self.AudioFileError(f"{self.filename} is not loaded")
         return librosa.feature.chroma_cqt(y=self.audio, sr=self.sample_rate)
 
     def calc_spectral_contrast(self):
+        if not self.audio:
+            raise self.AudioFileError(f"{self.filename} is not loaded")
         return librosa.feature.spectral_contrast(y=self.audio, sr=self.sample_rate)
 
     def calc_first_onset(self):
+        if not self.audio:
+            raise self.AudioFileError(f"{self.filename} is not loaded")
         onsets = librosa.onset.onset_detect(
             y=librosa.to_mono(self.audio), sr=self.sample_rate, units="samples"
         )
         return onsets[0]
 
     def weighted_similarity(self, target):
+        if None in (self.zero_crossings, self.chroma, self.spectral_contrast):
+            raise self.AudioFileError(
+                "Need to calculate zero crossings, chroma and spectral contrast before weighted similarity"
+            )
         # zero crossing
         zcr_similarity = 1 - np.abs(self.zero_crossings - target.zero_crossings)
 
@@ -105,6 +119,8 @@ class AudioFile:
 
     # returns a boolean (loopable/not loopable) and an error message if no BPM is found
     def is_loop(self):
+        if not self.audio:
+            raise self.AudioFileError(f"{self.filename} is not loaded")
         # find bpm - return early if no valid bpm found
         bpm_regex = r"^(?:.*?_)?[A-Z]+[A-Z][a-zA-Z]*_(\d+)(?:_.*)?$"
         bpm_match = re.match(bpm_regex, os.path.basename(self.filename))
@@ -139,6 +155,8 @@ class AudioFile:
             )
 
     def get_start_end_zero_crossing(self, threshold=0.02):
+        if not self.audio:
+            raise self.AudioFileError(f"{self.filename} is not loaded")
         if len(self.audio.shape) > 1:
             start_non_zero = any(abs(s) > threshold for s in self.audio[0])
             end_non_zero = any(abs(s) > threshold for s in self.audio[-1])
@@ -155,27 +173,29 @@ class AudioFile:
         else:
             return ""
 
-    def extend(self, infer=False):
-        bar_len_samples = round(self.sample_rate * ((60 / self.bpm) * 4.0))
-        print(f"Bar length: {bar_len_samples}")
-        print(f"First onset location: {self.first_onset}")
-        if bar_len_samples < self.first_onset:
-            new_bar_len = bar_len_samples
-            while new_bar_len < self.first_onset:
-                new_bar_len += bar_len_samples
-            bar_len_samples = new_bar_len
+    # def extend(self, infer=False):
+    #     bar_len_samples = round(self.sample_rate * ((60 / self.bpm) * 4.0))
+    #     print(f"Bar length: {bar_len_samples}")
+    #     print(f"First onset location: {self.first_onset}")
+    #     if bar_len_samples < self.first_onset:
+    #         new_bar_len = bar_len_samples
+    #         while new_bar_len < self.first_onset:
+    #             new_bar_len += bar_len_samples
+    #         bar_len_samples = new_bar_len
 
-        pad_len = bar_len_samples - self.first_onset
-        print(f"Padding audio with {pad_len} samples")
-        new_audio = np.ndarray(
-            shape=(self.audio.shape[0], self.audio.shape[1] + pad_len), dtype=float
-        )
-        for i in range(new_audio.shape[0]):
-            new_audio[i] = np.pad(self.audio[i], (pad_len, 0), "constant")
-        self.audio = new_audio
-        self.save()
+    #     pad_len = bar_len_samples - self.first_onset
+    #     print(f"Padding audio with {pad_len} samples")
+    #     new_audio = np.ndarray(
+    #         shape=(self.audio.shape[0], self.audio.shape[1] + pad_len), dtype=float
+    #     )
+    #     for i in range(new_audio.shape[0]):
+    #         new_audio[i] = np.pad(self.audio[i], (pad_len, 0), "constant")
+    #     self.audio = new_audio
+    #     self.save()
 
     def get_start_end_silence(self):
+        if not self.audio:
+            raise self.AudioFileError(f"{self.filename} is not loaded")
         audio_mono = librosa.to_mono(self.audio)
         audio_mono_trim, index = librosa.effects.trim(audio_mono, top_db=75)
         if librosa.get_duration(
@@ -192,20 +212,12 @@ class AudioFile:
             return start, end
 
     def save(self):
+        if not self.audio:
+            raise self.AudioFileError(f"{self.filename} is not loaded")
         if len(self.audio.shape) > 1:
             sf.write(self.filename, self.audio.T, self.sample_rate, subtype="PCM_24")
         else:
             sf.write(self.filename, self.audio, self.sample_rate, subtype="PCM_24")
-
-    def filename_to_link(self):
-        label = os.path.basename(self.filename)
-        if not create_filename_links:
-            return label
-        # Replace the UUID here with your own (see README.md)
-        uri = "kmtrigger://macro=B7271B0E-F479-434F-986A-C688A41E144A&value={}".format(
-            urllib.parse.quote(self.filename, safe="")
-        )
-        return f"\033]8;;{uri}\033\\{label}\033]8;;\033\\"
 
     def _get_sort_key(self):
         filename = str(self.filename.name)
