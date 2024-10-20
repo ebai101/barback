@@ -30,8 +30,8 @@ def fade(buf, fade_dir, fade_type):
 
 class AudioFile:
     class AudioFileError(Exception):
-        def __init__(self, filename):
-            super().__init__(filename)
+        def __init__(self, message):
+            super().__init__(message)
 
     def __init__(self, filename):
         self.filename = filename
@@ -41,47 +41,67 @@ class AudioFile:
         self.zero_crossings = None
         self.chroma = None
         self.spectral_contrast = None
-        self.load(sample_rate=self.sample_rate, mono=True)
+        self.loaded = False
 
     def load(self, sample_rate=None, mono=False):
+        if self.loaded:
+            raise AudioFile.AudioFileError(
+                f"Tried to load already loaded file {self.filename}"
+            )
+        if sample_rate is None:
+            sample_rate = self.sample_rate
         try:
-            if sample_rate is None:
-                sample_rate = self.sample_rate
             self.audio, sr = librosa.load(self.filename, sr=sample_rate, mono=mono)
         except Exception as e:
-            logging.error(
+            raise AudioFile.AudioFileError(
                 f"Unexpected error loading file {self.filename}: {type(e).__name__}, {e}"
             )
+        self.loaded = True
+
+    def unload(self):
+        if not self.loaded:
+            raise AudioFile.AudioFileError(
+                f"Tried to unload non-loaded audio file {self.filename}"
+            )
+        del self.audio
+        self.zero_crossings = None
+        self.chroma = None
+        self.spectral_contrast = None
+        self.loaded = False
 
     def __str__(self):
         return os.path.basename(self.filename)
 
     def calc_zero_crossings(self):
-        if not self.audio:
-            raise self.AudioFileError(f"{self.filename} is not loaded")
+        if not hasattr(self, "audio"):
+            raise AudioFile.AudioFileError(f"{self.filename} is not loaded")
         return np.mean(np.abs(np.diff(np.sign(self.audio))) > 0)
 
     def calc_chroma(self):
-        if not self.audio:
-            raise self.AudioFileError(f"{self.filename} is not loaded")
+        if not hasattr(self, "audio"):
+            raise AudioFile.AudioFileError(f"{self.filename} is not loaded")
         return librosa.feature.chroma_cqt(y=self.audio, sr=self.sample_rate)
 
     def calc_spectral_contrast(self):
-        if not self.audio:
-            raise self.AudioFileError(f"{self.filename} is not loaded")
+        if not hasattr(self, "audio"):
+            raise AudioFile.AudioFileError(f"{self.filename} is not loaded")
         return librosa.feature.spectral_contrast(y=self.audio, sr=self.sample_rate)
 
     def calc_first_onset(self):
-        if not self.audio:
-            raise self.AudioFileError(f"{self.filename} is not loaded")
+        if not hasattr(self, "audio"):
+            raise AudioFile.AudioFileError(f"{self.filename} is not loaded")
         onsets = librosa.onset.onset_detect(
             y=librosa.to_mono(self.audio), sr=self.sample_rate, units="samples"
         )
         return onsets[0]
 
     def weighted_similarity(self, target):
-        if None in (self.zero_crossings, self.chroma, self.spectral_contrast):
-            raise self.AudioFileError(
+        if (
+            self.zero_crossings is None
+            or self.chroma is None
+            or self.spectral_contrast is None
+        ):
+            raise AudioFile.AudioFileError(
                 "Need to calculate zero crossings, chroma and spectral contrast before weighted similarity"
             )
         # zero crossing
@@ -115,12 +135,12 @@ class AudioFile:
             zcr_similarity + chroma_similarity + normalized_spectral_similarity
         ) / 3
 
-        return self, target, result
+        return self.filename.name, target.filename.name, result
 
     # returns a boolean (loopable/not loopable) and an error message if no BPM is found
     def is_loop(self):
-        if not self.audio:
-            raise self.AudioFileError(f"{self.filename} is not loaded")
+        if not hasattr(self, "audio"):
+            raise AudioFile.AudioFileError(f"{self.filename} is not loaded")
         # find bpm - return early if no valid bpm found
         bpm_regex = r"^(?:.*?_)?[A-Z]+[A-Z][a-zA-Z]*_(\d+)(?:_.*)?$"
         bpm_match = re.match(bpm_regex, os.path.basename(self.filename))
@@ -155,8 +175,8 @@ class AudioFile:
             )
 
     def get_start_end_zero_crossing(self, threshold=0.02):
-        if not self.audio:
-            raise self.AudioFileError(f"{self.filename} is not loaded")
+        if not hasattr(self, "audio"):
+            raise AudioFile.AudioFileError(f"{self.filename} is not loaded")
         if len(self.audio.shape) > 1:
             start_non_zero = any(abs(s) > threshold for s in self.audio[0])
             end_non_zero = any(abs(s) > threshold for s in self.audio[-1])
@@ -194,8 +214,8 @@ class AudioFile:
     #     self.save()
 
     def get_start_end_silence(self):
-        if not self.audio:
-            raise self.AudioFileError(f"{self.filename} is not loaded")
+        if not hasattr(self, "audio"):
+            raise AudioFile.AudioFileError(f"{self.filename} is not loaded")
         audio_mono = librosa.to_mono(self.audio)
         audio_mono_trim, index = librosa.effects.trim(audio_mono, top_db=75)
         if librosa.get_duration(
@@ -212,8 +232,8 @@ class AudioFile:
             return start, end
 
     def save(self):
-        if not self.audio:
-            raise self.AudioFileError(f"{self.filename} is not loaded")
+        if not hasattr(self, "audio"):
+            raise AudioFile.AudioFileError(f"{self.filename} is not loaded")
         if len(self.audio.shape) > 1:
             sf.write(self.filename, self.audio.T, self.sample_rate, subtype="PCM_24")
         else:
