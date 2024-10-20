@@ -3,6 +3,7 @@ import itertools
 import subprocess
 import sys
 from concurrent.futures import ProcessPoolExecutor
+from enum import Enum
 from multiprocessing import cpu_count
 from pathlib import Path
 
@@ -13,13 +14,7 @@ from textual import work
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Container
-from textual.widgets import (
-    Button,
-    Footer,
-    Header,
-    ProgressBar,
-    Rule,
-)
+from textual.widgets import Button, Footer, Header, ProgressBar, Rule
 from widgets import DataFrameTable, FileTree, InfoBox
 
 
@@ -34,12 +29,13 @@ class Barback(App):
         Binding("F", "final_check", "Final Check"),
     ]
     CSS_PATH = "barback.tcss"
+    Mode = Enum("Mode", ["FILES", "LOOPS", "DUPLICATES", "FINALIZER", "EXTENDER"])
 
     def __init__(self, audio_dir):
         super().__init__()
         self.executor = ProcessPoolExecutor(max_workers=cpu_count())
         self.audio_dir = Path(audio_dir)
-        self.data = pd.DataFrame(
+        self.audio_data = pd.DataFrame(
             columns=[
                 "File",
                 "Duration",
@@ -51,7 +47,8 @@ class Barback(App):
                 "ZC",
             ]
         )
-        self.data_duplicates = pd.DataFrame(columns=["File", "File 2", "Similarity"])
+        self.duplicate_data = pd.DataFrame(columns=["File", "File 2", "Similarity"])
+        self.mode = Barback.Mode.FILES
         self.loaded = False
 
     def action_check_loops(self) -> None:
@@ -97,39 +94,36 @@ class Barback(App):
 
     def on_tree_node_highlighted(self, message: FileTree.NodeHighlighted) -> None:
         table = self.query_one("#table")
-
         if message.node.is_root:
-            table.selected_dir = None
+            message.node.tree.selected_dir = self.audio_dir
         else:
-            table.selected_dir = message.node.data.path
-
+            message.node.tree.selected_dir = message.node.data.path
         if self.loaded:
-            if table.selected_mode == "Duplicates":
-                table.update_df(
-                    self.data_duplicates, sort_col="Similarity", sort_asc=False
-                )
-            else:
-                table.update_df(self.data)
+            self.populate_table()
             table.focus()
 
     def on_button_pressed(self, message: Button.Pressed) -> None:
-        table = self.query_one("#table")
-        table.set_mode(str(message.button.label))
-
-        if self.loaded:
-            if table.selected_mode == "Duplicates":
-                table.update_df(
-                    self.data_duplicates, sort_col="Similarity", sort_asc=False
-                )
-            else:
-                table.update_df(self.data)
+        match message.button.id:
+            case "files-button":
+                self.mode = Barback.Mode.FILES
+            case "loops-button":
+                self.mode = Barback.Mode.LOOPS
+            case "duplicates-button":
+                self.mode = Barback.Mode.DUPLICATES
+            case "finalizer-button":
+                self.mode = Barback.Mode.FINALIZER
+            case "extender-button":
+                self.mode = Barback.Mode.EXTENDER
+            case _:
+                raise ValueError(f"Unexpected button press: #{message.button.id}")
+        self.populate_table()
 
     def on_info_box_info(self, message: InfoBox.Info) -> None:
-        info_box = self.query_one(InfoBox)
+        info_box = self.query_one("#info")
         info_box.update(message.text)
 
     def info(self, text: str):
-        info_box = self.query_one(InfoBox)
+        info_box = self.query_one("#info")
         info_box.post_message(info_box.Info(text))
 
     @staticmethod
@@ -147,12 +141,57 @@ class Barback(App):
         else:
             return None
 
+    @staticmethod
+    def filter_df_by_dir(df: pd.DataFrame, dirname: Path):
+        return df[
+            df.apply(
+                lambda row: str(dirname) in str(row["File"].filename),
+                axis=1,
+            )
+        ]
+
+    @work
+    async def populate_table(self):
+        # check mode of app
+        # check selected dir of tree
+        # assemble subset df
+        # sort and filter
+        # pass to dftable to update
+
+        table = self.query_one("#table")
+        current_mode = self.mode
+        current_dir = self.query_one("#tree").selected_dir
+
+        match current_mode:
+            case Barback.Mode.FILES:
+                df = Barback.filter_df_by_dir(self.audio_data, current_dir)
+                df = df.sort_values("File", ascending=True)
+                df = df.loc[:, ["File", "Duration", "Sample rate", "Bit depth"]]
+                table.update_df(df)
+
+            case Barback.Mode.LOOPS:
+                df = Barback.filter_df_by_dir(self.audio_data, current_dir)
+                df = df.sort_values("File", ascending=True)
+                df = df.loc[:, ["File", "Loop", "BPM", "Bars", "ZC"]]
+                table.update_df(df)
+
+            case Barback.Mode.DUPLICATES:
+                # df = Barback.filter_df_by_dir(self.duplicate_data, current_dir)
+                df = self.duplicate_data
+                df = df.sort_values("Similarity", ascending=False)
+                df = df.loc[:, ["File", "File 2", "Similarity"]]
+                table.update_df(df)
+            case Barback.Mode.FINALIZER:
+                pass
+            case Barback.Mode.EXTENDER:
+                pass
+
     @work
     async def check_loops(self):
         progress_bar = self.query_one("#progress")
         self.executor = ProcessPoolExecutor(max_workers=cpu_count())
 
-        files = self.data["File"].tolist()
+        files = self.audio_data["File"].tolist()
         total_tasks = len(files)
 
         self.info("Checking loops")
@@ -169,24 +208,21 @@ class Barback(App):
         results_dict = {r[0].filename: r[1:] for r in results}
 
         new_cols = ["Loop", "BPM", "Bars", "ZC"]
-        self.data[new_cols] = self.data["File"].apply(
+        self.audio_data[new_cols] = self.audio_data["File"].apply(
             lambda x: pd.Series(results_dict.get(x.filename, [None] * 4))
         )
-        self.query_one("#table").update_df(self.data)
+        self.populate_table()
         self.info("Done checking loops")
         self.executor.shutdown()
 
     @work
     async def find_duplicates(self):
-        table = self.query_one("#table")
         progress_bar = self.query_one("#progress")
         self.executor = ProcessPoolExecutor(max_workers=cpu_count())
 
-        files = table.filter_df_by_dir(self.data, table.selected_dir)["File"].tolist()
+        files = self.audio_data["File"].tolist()
         total_tasks = len(files)
         progress_bar.update(total=total_tasks, progress=0)
-
-        self.info(f"Preprocessing {total_tasks} files")
 
         async def _preproc(file):
             loop = asyncio.get_event_loop()
@@ -196,6 +232,7 @@ class Barback(App):
             progress_bar.advance(1)
             return result
 
+        self.info(f"Preprocessing {total_tasks} files")
         tasks = [_preproc(file) for file in files]
         preproc_files = await asyncio.gather(*tasks)
 
@@ -205,7 +242,6 @@ class Barback(App):
         )
         total_tasks = len(file_combinations)
         progress_bar.update(total=total_tasks, progress=0)
-        self.info(f"Finding duplicates, checking {total_tasks} combinations")
 
         async def _proc(combination):
             loop = asyncio.get_event_loop()
@@ -221,37 +257,42 @@ class Barback(App):
                     return None
                 return result
             except Exception as e:
-                self.info(f"Error processing combination {combination}: {e}")
+                raise RuntimeError(e)
                 return None
 
+        self.info(f"Finding duplicates, checking {total_tasks} combinations")
         tasks = [_proc(combination) for combination in file_combinations]
         results = await asyncio.gather(*tasks)
         results = [r for r in results if r is not None and r[2] > 0.9]
+
+        async def _unload(file):
+            loop = asyncio.get_event_loop()
+            await loop.run_in_executor(self.executor, file.unload)
+
+        await asyncio.gather(*[_unload(file) for file in preproc_files])
 
         new_data = []
         for r in results:
             if r[2] > 0.9:
                 new_data.append({"File": r[0], "File 2": r[1], "Similarity": r[2]})
 
-            self.data_duplicates = pd.DataFrame(new_data)
+            self.duplicate_data = pd.DataFrame(new_data)
 
-        if not self.data_duplicates.empty:
-            table.update_df(self.data_duplicates, sort_col="Similarity", sort_asc=False)
+        self.populate_table()
+        if not self.duplicate_data.empty:
             self.info("Done finding duplicates")
         else:
             self.info("No duplicates found")
+
         self.executor.shutdown()
 
     @work
-    async def load_audio_files(self):
-        table = self.query_one("#table")
-        progress_bar = self.query_one("#progress")
+    async def init_audio_data(self):
         self.executor = ProcessPoolExecutor(max_workers=cpu_count())
+        progress_bar = self.query_one("#progress")
 
-        files = self.get_valid_audio_files(self.audio_dir)
-        total_tasks = len(files)
-        self.info(f"Loading {len(files)} audio files from {self.audio_dir}")
-        progress_bar.update(total=total_tasks, progress=0)
+        audio_files = self.get_valid_audio_files(self.audio_dir)
+        progress_bar.update(total=len(audio_files), progress=0)
 
         async def _proc(file):
             loop = asyncio.get_event_loop()
@@ -261,19 +302,20 @@ class Barback(App):
             progress_bar.advance(1)
             return result
 
-        tasks = [_proc(file) for file in files]
+        self.info("Barback is starting...")
+        tasks = [_proc(file) for file in audio_files]
         results = await asyncio.gather(*tasks)
 
         new_data = pd.DataFrame(results, columns=["File"])
         new_data["Duration"] = new_data["File"].apply(lambda x: x.duration)
         new_data["Sample rate"] = new_data["File"].apply(lambda x: x.sample_rate)
         new_data["Bit depth"] = new_data["File"].apply(lambda x: x.bit_depth)
-        self.data = pd.concat([self.data, new_data], ignore_index=True).fillna("")
+        self.audio_data = pd.concat(
+            [self.audio_data, new_data], ignore_index=True
+        ).fillna("")
 
-        table.update_df(self.data)
-        self.info(
-            f"Finished loading {len(self.data)} audio files from {self.audio_dir}"
-        )
+        self.info(f"Bartender has started, indexing {len(audio_files)} files")
+        self.populate_table()
         self.loaded = True
         self.executor.shutdown()
 
@@ -281,13 +323,12 @@ class Barback(App):
         table = self.query_one("#table")
         table.focus()
         table.cursor_type = "row"
-
-        self.load_audio_files()
+        self.init_audio_data()
 
     def compose(self) -> ComposeResult:
         yield Header()
         yield Container(
-            InfoBox(),
+            InfoBox(id="info"),
             Container(
                 Button("Files", id="files-button", classes="mode-button"),
                 Button("Loops", id="loops-button", classes="mode-button"),

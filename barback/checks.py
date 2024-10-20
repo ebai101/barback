@@ -3,17 +3,26 @@ import re
 
 import audio_file
 import librosa
+import numpy as np
 import soundfile as sf
 
 
 def check_loop(af: audio_file.AudioFile):
+    af.load(mono=True)
     file, is_loop, bpm, num_bars = af.is_loop()
     zc = af.get_start_end_zero_crossing()
+    af.unload()
 
     return file, is_loop, bpm, num_bars, zc
 
 
 def find_duplicates_preproc(af: audio_file.AudioFile):
+    af.load(sample_rate=22050, mono=True)
+    if len(af.audio) < 1024:
+        print(len(af.audio))
+        pad_width = 1024 - len(af.audio)
+        af.audio = np.pad(af.audio, (0, pad_width), mode="constant")
+
     af.zero_crossings = af.calc_zero_crossings()
     af.chroma = af.calc_chroma()
     af.spectral_contrast = af.calc_spectral_contrast()
@@ -21,10 +30,7 @@ def find_duplicates_preproc(af: audio_file.AudioFile):
 
 
 def find_duplicates(afA: audio_file.AudioFile, afB: audio_file.AudioFile):
-    try:
-        if abs(afA.duration - afB.duration) > 0.1:
-            return afA, afB, 0
-    except TypeError:
+    if abs(afA.duration - afB.duration) > 0.1:
         return afA, afB, 0
     s = afA.weighted_similarity(afB)
     return s  # afA, afB, similarity
