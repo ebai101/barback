@@ -1,0 +1,143 @@
+import asyncio
+import os
+import re
+from concurrent.futures import ProcessPoolExecutor
+from multiprocessing import cpu_count
+from typing import Tuple
+
+import pandas as pd
+from textual import work
+
+from barback.audio_file import AudioFile
+from barback.messages import ProgressBarAdvance, ProgressBarUpdate, TableUpdate
+from barback.state import BarbackState
+from barback.util import BarbackProtocol
+
+
+# wav, 44.1, 24 bit
+def final_check_file_sr_bd(af: AudioFile) -> list[str]:
+    issues = []
+
+    extension = af.filename.suffix
+    if extension != ".wav":
+        issues.append("not a wav file")
+
+    if af.sample_rate != 44100:
+        issues.append(
+            f"File {af.filename.name} sample rate {af.sample_rate} is incorrect"
+        )
+
+    if af.bit_depth != "PCM_24":
+        issues.append(f"File {af.filename.name} bit depth {af.bit_depth} is incorrect")
+
+    return issues
+
+
+# no extra silence at start/end
+def final_check_silence(af: AudioFile) -> list[str]:
+    issues = []
+
+    start, end = af.get_start_end_silence()
+    if (
+        "loop" not in str(af.filename) and start >= 500
+    ):  # tighter restriction on one shots
+        issues.append(f"{start} samples at the start")
+    elif start >= 22050:
+        issues.append(f"{start} samples at the start")
+    if end >= 22050:
+        issues.append(f"{end} samples at the end")
+
+    return issues
+
+
+# no clicks/pops at start/end
+def final_check_start_end_zero_crossing(af: AudioFile) -> list[str]:
+    nonzeros = af.get_start_end_zero_crossing()
+    if nonzeros != "":
+        return [f"nonzero values at {nonzeros}"]
+
+    return []
+
+
+# loops are proper loops
+def final_check_loops(af: AudioFile) -> list[str]:
+    if "loop" not in str(af.filename):
+        return []
+    is_loop = af.is_loop().is_loop
+    if not is_loop:
+        return ["does not loop"]
+    return []
+
+
+# tonal loops have key signature
+def final_check_tonal_loop_key_signature(af: AudioFile) -> list[str]:
+    issues = []
+
+    # first check if there are multiple key signatures
+    key_sig_regex = r"_[A-G][b#]?(maj|min)?"
+    key_sig_matches = re.findall(key_sig_regex, os.path.basename(af.filename))
+    if len(key_sig_matches) > 1:
+        issues.append("multiple key signatures")
+
+    # then, if the file is a loop, check that the key signature is at the end
+    if "loop" not in str(af.filename).lower():
+        return issues
+    key_sig_at_end_regex = r"^.*_[A-G](?:#|b)?(?:maj|min)?(?:\.wav)?$"
+    if not re.match(key_sig_at_end_regex, af.filename.name) and not any(
+        s in str(af.filename).lower() for s in ["drum", "perc", "hihat"]
+    ):
+        issues.append("does not have a key signature but is a tonal loop")
+    return issues
+
+
+def finalize(af: AudioFile) -> Tuple[str, list[str]]:
+    issues = []
+    af.load(mono=True)
+
+    def append_issue(i: str) -> None:
+        issues.append(i)
+
+    for i in final_check_file_sr_bd(af):
+        append_issue(i)
+    for i in final_check_silence(af):
+        append_issue(i)
+    for i in final_check_start_end_zero_crossing(af):
+        append_issue(i)
+    for i in final_check_loops(af):
+        append_issue(i)
+    for i in final_check_tonal_loop_key_signature(af):
+        append_issue(i)
+
+    af.unload()
+    return af.filename.name, issues
+
+
+@work
+async def finalizer(app: BarbackProtocol, state: BarbackState) -> None:
+    state.executor = ProcessPoolExecutor(max_workers=cpu_count())
+    files = state.audio_data["File"].tolist()
+    total_tasks = len(files)
+    app.info("Running finalizer")
+    app.post_message(ProgressBarUpdate(total_tasks, 0))
+
+    async def _proc(file: AudioFile) -> Tuple[str, list[str]]:
+        loop = asyncio.get_event_loop()
+        result = await loop.run_in_executor(state.executor, finalize, file)
+        app.post_message(ProgressBarAdvance(1))
+        return result
+
+    tasks = [_proc(file) for file in files]
+    results = await asyncio.gather(*tasks)
+    # results = [finalize(file) for file in files]
+
+    new_rows = []
+    for file_name, issues_list in results:
+        if len(issues_list) == 0:
+            continue
+        # new_rows.append({"File": file_name, "Issues": issues_list[0]})
+        for issue in issues_list:
+            new_rows.append({"File": file_name, "Issues": issue})
+    state.finalizer_data = pd.DataFrame(new_rows, columns=["File", "Issues"])
+    app.post_message(TableUpdate("finalizer"))
+
+    state.executor.shutdown()
