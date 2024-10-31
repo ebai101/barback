@@ -92,4 +92,8 @@ async def find_duplicates(app: BarbackProtocol, state: BarbackState) -> None:
 
     state.duplicate_data = pd.DataFrame(new_data)
     app.post_message(TableUpdate("find_duplicates"))
+    if not state.duplicate_data.empty:
+        app.info("Done finding duplicates")
+    else:
+        app.info("No duplicates found")
     state.executor.shutdown()

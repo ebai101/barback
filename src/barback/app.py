@@ -39,18 +39,12 @@ class Barback(App):  # type: ignore
 
     def action_check_loops(self) -> None:
         check_loops(self, self.state)
-        self.info("Done checking loops")
 
     def action_find_duplicates(self) -> None:
         find_duplicates(self, self.state)
-        if not self.state.duplicate_data.empty:
-            self.info("Done finding duplicates")
-        else:
-            self.info("No duplicates found")
 
     def action_finalizer(self) -> None:
         finalizer(self, self.state)
-        self.info("Done running finalizer")
 
     def action_open_in_rx(self) -> None:
         table: DataFrameTable = self.query_one("#table", DataFrameTable)

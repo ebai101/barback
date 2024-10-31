@@ -54,4 +54,5 @@ async def check_loops(app: BarbackProtocol, state: BarbackState) -> None:
         lambda x: pd.Series(results_dict.get(x.filename, [None] * 4))
     )
     app.post_message(TableUpdate("check_loops"))
+    app.info("Done checking loops")
     state.executor.shutdown()

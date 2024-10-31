@@ -139,5 +139,6 @@ async def finalizer(app: BarbackProtocol, state: BarbackState) -> None:
             new_rows.append({"File": file_name, "Issues": issue})
     state.finalizer_data = pd.DataFrame(new_rows, columns=["File", "Issues"])
     app.post_message(TableUpdate("finalizer"))
+    app.info("Done running finalizer")
 
     state.executor.shutdown()
