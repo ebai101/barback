@@ -6,33 +6,40 @@ from textual.widgets import DataTable
 
 
 class DataFrameTable(DataTable):  # type: ignore
-    """A DataTable widget that displays a pandas DataFrame."""
 
     BINDINGS = [
         Binding("j", "cursor_down", "Cursor down", show=False),
         Binding("k", "cursor_up", "Cursor up", show=False),
     ]
 
-    # Internal storage for DataFrame
+    _display_df: pd.DataFrame
     _current_df: pd.DataFrame
+    _current_cols: list[str]
     _current_sort_col: str
     _current_sort_asc: bool
 
     def __init__(self, id: str = "") -> None:
         super().__init__(id=id)
         self.cursor_type = "row"
+        self._display_df = pd.DataFrame()
         self._current_df = pd.DataFrame()
+        self._current_cols = []
         self._current_sort_col = "File"
         self._current_sort_asc = True
 
     def set_df(
         self,
         df: pd.DataFrame,
+        columns: list[str] | None = None,
         sort_col: str | None = None,
         sort_asc: bool | None = None,
     ) -> None:
-        """Set the DataFrame and optionally update sorting."""
         self._current_df = df
+
+        if columns is not None:
+            self._current_cols = columns
+        else:
+            self._current_cols = []
 
         if sort_col is not None:
             self._current_sort_col = sort_col
@@ -41,8 +48,15 @@ class DataFrameTable(DataTable):  # type: ignore
 
         self._refresh_table()
 
+    def get_df(self) -> pd.DataFrame:
+        return self._current_df
+
+    def get_df_row_at(self, index: int) -> pd.Series:
+        if not self._current_df.empty and 0 <= index < len(self._current_df):
+            return self._current_df.iloc[index]
+        raise IndexError(f"Row index {index} out of bounds")
+
     def _refresh_table(self) -> None:
-        """Refresh the table display."""
         if not self._current_df.empty:
             if self._current_sort_col in self._current_df.columns:
                 self._current_df = self._current_df.sort_values(
@@ -50,18 +64,19 @@ class DataFrameTable(DataTable):  # type: ignore
                     ascending=self._current_sort_asc,
                     na_position="last",
                 )
+            if self._current_cols != []:
+                self._display_df = self._current_df.loc[:, self._current_cols]
+            else:
+                self._display_df = self._current_df
 
-            # Clear and rebuild the table
             self.clear(columns=True)
             self.add_columns(*self._get_df_columns())
-            self.add_rows(self._get_df_rows(self._current_df))
+            self.add_rows(self._get_df_rows(self._display_df))
         else:
             self.clear(columns=True)
 
     def _get_df_rows(self, df: pd.DataFrame) -> list[Any]:
-        """Convert dataframe rows to iterable."""
         return list(df.itertuples(index=False, name=None))
 
     def _get_df_columns(self) -> tuple[Any]:
-        """Extract column names from dataframe."""
-        return tuple(self._current_df.columns.values.tolist())
+        return tuple(self._display_df.columns.values.tolist())

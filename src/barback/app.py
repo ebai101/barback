@@ -1,3 +1,4 @@
+import os
 import subprocess
 from pathlib import Path
 
@@ -6,10 +7,9 @@ from textual.binding import Binding
 from textual.containers import Container
 from textual.widgets import Button, Footer, Header, ProgressBar, Rule
 
-from barback.audio_file import AudioFile
 from barback.messages import ProgressBarAdvance, ProgressBarUpdate, TableUpdate
 from barback.state import BarbackState, Mode
-from barback.util import filter_df_by_dir
+from barback.util import filter_df_by_dir, safe_absolute_path
 from barback.widgets.dataframe_table import DataFrameTable
 from barback.widgets.file_tree import FileTree
 from barback.widgets.info_box import InfoBox
@@ -49,32 +49,14 @@ class Barback(App):  # type: ignore
 
     def action_open_in_rx(self) -> None:
         table: DataFrameTable = self.query_one("#table", DataFrameTable)
-        selected_row = table.cursor_row
-        row = table.get_row_at(selected_row)
-        if isinstance(row[0], AudioFile):
-            self.info(f"Opening {row[0].filename} in RX (AudioFile)")
-            filename = str(row[0].filename)
-        elif isinstance(row[0], str):
-            self.info(f"Opening {row[1]} in RX (str)")
-            filename = row[1]
-        elif isinstance(row, Path):
-            self.info(f"Opening {row.name} in RX (Path)")
-            filename = str(row)
+        filename = safe_absolute_path(table.get_df_row_at(table.cursor_row))
+        self.info(f"Opening {os.path.basename(filename)} in RX")
         subprocess.call(["open", "-a", "iZotope RX 10 Audio Editor", str(filename)])
 
     def action_open_in_reason(self) -> None:
         table = self.query_one("#table", DataFrameTable)
-        selected_row = table.cursor_row
-        row = table.get_row_at(selected_row)
-        if isinstance(row[0], AudioFile):
-            self.info(f"Opening {row[0].filename} in Reason (AudioFile)")
-            filename = str(row[0].filename)
-        elif isinstance(row[0], str):
-            self.info(f"Opening {row[1]} in Reason (str)")
-            filename = row[1]
-        elif isinstance(row, Path):
-            self.info(f"Opening {row.name} in Reason (Path)")
-            filename = str(row)
+        filename = safe_absolute_path(table.get_df_row_at(table.cursor_row))
+        self.info(f"Opening {os.path.basename(filename)} in Reason")
         subprocess.call(
             [
                 "/Applications/Keyboard Maestro.app/Contents/MacOS/keyboardmaestro",
@@ -86,15 +68,14 @@ class Barback(App):  # type: ignore
 
     def action_open_in_finder(self) -> None:
         table = self.query_one("#table", DataFrameTable)
-        selected_row = table.cursor_row
-        af = table.get_row_at(selected_row)[0]
-        self.info(f"Revealing {af.filename} in Finder")
+        filename = safe_absolute_path(table.get_df_row_at(table.cursor_row))
+        self.info(f"Revealing {os.path.basename(filename)} in Finder")
         subprocess.call(
             [
                 "/Applications/Keyboard Maestro.app/Contents/MacOS/keyboardmaestro",
                 "B7271B0E-F479-434F-986A-C688A41E144A",
                 "--parameter",
-                f"{af.filename}",
+                f"{filename}",
             ]
         )
 
@@ -142,19 +123,28 @@ class Barback(App):  # type: ignore
         match current_mode:
             case Mode.FILES:
                 df = filter_df_by_dir(self.state.audio_data, current_dir)
-                df = df.loc[:, ["File", "Duration", "Sample rate", "Bit depth"]]
-                table.set_df(df, sort_col="File", sort_asc=True)
+                table.set_df(
+                    df,
+                    columns=["File", "Duration", "Sample rate", "Bit depth"],
+                    sort_col="File",
+                    sort_asc=True,
+                )
             case Mode.LOOPS:
                 df = filter_df_by_dir(self.state.audio_data, current_dir)
-                df = df.loc[:, ["File", "Loop", "BPM", "Bars", "ZC"]]
-                table.set_df(df, sort_col="File", sort_asc=True)
+                table.set_df(
+                    df,
+                    columns=["File", "Loop", "BPM", "Bars", "ZC"],
+                    sort_col="File",
+                    sort_asc=True,
+                )
             case Mode.DUPLICATES:
                 df = self.state.duplicate_data
                 table.set_df(df, sort_col="Similarity", sort_asc=False)
             case Mode.FINALIZER:
                 df = self.state.finalizer_data
-                df = df.loc[:, ["File", "Issues"]]
-                table.set_df(df, sort_col="File", sort_asc=True)
+                table.set_df(
+                    df, columns=["File", "Issues"], sort_col="File", sort_asc=True
+                )
             case Mode.EXTENDER:
                 pass
         table.focus()
