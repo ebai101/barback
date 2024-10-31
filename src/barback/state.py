@@ -32,6 +32,6 @@ class BarbackState:
     duplicate_data: pd.DataFrame = pd.DataFrame(
         columns=["File", "File 2", "Similarity"]
     )
-    finalizer_data: pd.DataFrame = pd.DataFrame(columns=["File", "Issues"])
+    finalizer_data: pd.DataFrame = pd.DataFrame(columns=["File", "Full Path", "Issues"])
     executor: ProcessPoolExecutor = ProcessPoolExecutor(max_workers=cpu_count())
     loaded: bool = False

@@ -3,6 +3,7 @@ import os
 import re
 from concurrent.futures import ProcessPoolExecutor
 from multiprocessing import cpu_count
+from pathlib import Path
 from typing import Tuple
 
 import pandas as pd
@@ -90,7 +91,7 @@ def final_check_tonal_loop_key_signature(af: AudioFile) -> list[str]:
     return issues
 
 
-def finalize(af: AudioFile) -> Tuple[str, list[str]]:
+def finalize(af: AudioFile) -> Tuple[str, Path, list[str]]:
     issues = []
     af.load(mono=True)
 
@@ -109,7 +110,7 @@ def finalize(af: AudioFile) -> Tuple[str, list[str]]:
         append_issue(i)
 
     af.unload()
-    return af.filename.name, issues
+    return af.filename.name, af.filename, issues
 
 
 @work
@@ -120,7 +121,7 @@ async def finalizer(app: BarbackProtocol, state: BarbackState) -> None:
     app.info("Running finalizer")
     app.post_message(ProgressBarUpdate(total_tasks, 0))
 
-    async def _proc(file: AudioFile) -> Tuple[str, list[str]]:
+    async def _proc(file: AudioFile) -> Tuple[str, Path, list[str]]:
         loop = asyncio.get_event_loop()
         result = await loop.run_in_executor(state.executor, finalize, file)
         app.post_message(ProgressBarAdvance(1))
@@ -131,13 +132,14 @@ async def finalizer(app: BarbackProtocol, state: BarbackState) -> None:
     # results = [finalize(file) for file in files]
 
     new_rows = []
-    for file_name, issues_list in results:
+    for file_name, full_path, issues_list in results:
         if len(issues_list) == 0:
             continue
-        # new_rows.append({"File": file_name, "Issues": issues_list[0]})
         for issue in issues_list:
-            new_rows.append({"File": file_name, "Issues": issue})
-    state.finalizer_data = pd.DataFrame(new_rows, columns=["File", "Issues"])
+            new_rows.append(
+                {"File": file_name, "Full Path": full_path, "Issues": issue}
+            )
+    state.finalizer_data = pd.DataFrame(new_rows)
     app.post_message(TableUpdate("finalizer"))
     app.info("Done running finalizer")
 

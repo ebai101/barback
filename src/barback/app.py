@@ -6,6 +6,7 @@ from textual.binding import Binding
 from textual.containers import Container
 from textual.widgets import Button, Footer, Header, ProgressBar, Rule
 
+from barback.audio_file import AudioFile
 from barback.messages import ProgressBarAdvance, ProgressBarUpdate, TableUpdate
 from barback.state import BarbackState, Mode
 from barback.util import filter_df_by_dir
@@ -49,21 +50,37 @@ class Barback(App):  # type: ignore
     def action_open_in_rx(self) -> None:
         table: DataFrameTable = self.query_one("#table", DataFrameTable)
         selected_row = table.cursor_row
-        af = table.get_row_at(selected_row)[0]
-        self.info(f"Opening {af.filename} in RX")
-        subprocess.call(["open", "-a", "iZotope RX 10 Audio Editor", str(af.filename)])
+        row = table.get_row_at(selected_row)
+        if isinstance(row[0], AudioFile):
+            self.info(f"Opening {row[0].filename} in RX (AudioFile)")
+            filename = str(row[0].filename)
+        elif isinstance(row[0], str):
+            self.info(f"Opening {row[1]} in RX (str)")
+            filename = row[1]
+        elif isinstance(row, Path):
+            self.info(f"Opening {row.name} in RX (Path)")
+            filename = str(row)
+        subprocess.call(["open", "-a", "iZotope RX 10 Audio Editor", str(filename)])
 
     def action_open_in_reason(self) -> None:
         table = self.query_one("#table", DataFrameTable)
         selected_row = table.cursor_row
-        af = table.get_row_at(selected_row)[0]
-        self.info(f"Opening {af.filename} in Reason")
+        row = table.get_row_at(selected_row)
+        if isinstance(row[0], AudioFile):
+            self.info(f"Opening {row[0].filename} in Reason (AudioFile)")
+            filename = str(row[0].filename)
+        elif isinstance(row[0], str):
+            self.info(f"Opening {row[1]} in Reason (str)")
+            filename = row[1]
+        elif isinstance(row, Path):
+            self.info(f"Opening {row.name} in Reason (Path)")
+            filename = str(row)
         subprocess.call(
             [
                 "/Applications/Keyboard Maestro.app/Contents/MacOS/keyboardmaestro",
                 "D66BA3D1-E83A-4A96-878F-29DC4D7D8B85",
                 "--parameter",
-                f"{af.filename}",
+                f"{filename}",
             ]
         )
 
@@ -136,7 +153,8 @@ class Barback(App):  # type: ignore
                 table.set_df(df, sort_col="Similarity", sort_asc=False)
             case Mode.FINALIZER:
                 df = self.state.finalizer_data
-                table.set_df(df)
+                df = df.loc[:, ["File", "Issues"]]
+                table.set_df(df, sort_col="File", sort_asc=True)
             case Mode.EXTENDER:
                 pass
         table.focus()
