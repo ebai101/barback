@@ -12,7 +12,7 @@ from barback.state import BarbackState
 from barback.util import BarbackProtocol
 
 
-def check_loop(af: AudioFile) -> Tuple[IsLoopResponse, str]:
+def check_loops_proc(af: AudioFile) -> Tuple[IsLoopResponse, str]:
     af.load(mono=True)
     is_loop = af.is_loop()
     zc = af.get_start_end_zero_crossing()
@@ -33,7 +33,7 @@ async def check_loops(app: BarbackProtocol, state: BarbackState) -> None:
 
     async def _proc(file: AudioFile) -> Tuple[IsLoopResponse, str]:
         loop = asyncio.get_event_loop()
-        result = await loop.run_in_executor(state.executor, check_loop, file)
+        result = await loop.run_in_executor(state.executor, check_loops_proc, file)
         app.post_message(ProgressBarAdvance(1))
         return result
 

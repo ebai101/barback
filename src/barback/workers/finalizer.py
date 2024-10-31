@@ -91,7 +91,7 @@ def final_check_tonal_loop_key_signature(af: AudioFile) -> list[str]:
     return issues
 
 
-def finalize(af: AudioFile) -> Tuple[str, Path, list[str]]:
+def finalizer_proc(af: AudioFile) -> Tuple[str, Path, list[str]]:
     issues = []
     af.load(mono=True)
 
@@ -123,7 +123,7 @@ async def finalizer(app: BarbackProtocol, state: BarbackState) -> None:
 
     async def _proc(file: AudioFile) -> Tuple[str, Path, list[str]]:
         loop = asyncio.get_event_loop()
-        result = await loop.run_in_executor(state.executor, finalize, file)
+        result = await loop.run_in_executor(state.executor, finalizer_proc, file)
         app.post_message(ProgressBarAdvance(1))
         return result
 
