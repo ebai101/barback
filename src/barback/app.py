@@ -1,5 +1,6 @@
 import os
 import subprocess
+from datetime import datetime
 from pathlib import Path
 
 from textual.app import App, ComposeResult
@@ -7,13 +8,18 @@ from textual.binding import Binding
 from textual.containers import Container
 from textual.widgets import Button, Footer, Header, ProgressBar, Rule
 
-from barback.messages import ProgressBarAdvance, ProgressBarUpdate, TableUpdate
 from barback.state import BarbackState, Mode
-from barback.util import filter_df_by_dir, safe_absolute_path
-from barback.widgets.dataframe_table import DataFrameTable
+from barback.util.messages import (
+    FileChanged,
+    ProgressBarAdvance,
+    ProgressBarUpdate,
+    TableUpdate,
+)
+from barback.widgets.audio_table import AudioTable
 from barback.widgets.file_tree import FileTree
 from barback.widgets.info_box import InfoBox
 from barback.workers.check_loops import check_loops
+from barback.workers.file_watcher import watch_files
 from barback.workers.finalizer import finalizer
 from barback.workers.find_duplicates import find_duplicates
 from barback.workers.init_audio_data import init_audio_data
@@ -49,15 +55,16 @@ class Barback(App):  # type: ignore
         finalizer(self, self.state)
 
     def action_open_in_rx(self) -> None:
-        table: DataFrameTable = self.query_one("#table", DataFrameTable)
-        filename = safe_absolute_path(table.get_df_row_at(table.cursor_row))
+        table: AudioTable = self.query_one("#table", AudioTable)
+        filename = table.get_cell_data(table.cursor_row, "file").filename
         self.info(f"Opening {os.path.basename(filename)} in RX")
         subprocess.call(["open", "-a", "iZotope RX 10 Audio Editor", str(filename)])
 
     def action_open_all_issue_type_in_rx(self) -> None:
+        return
         if self.state.mode != Mode.FINALIZER:
             return
-        table: DataFrameTable = self.query_one("#table", DataFrameTable)
+        table: AudioTable = self.query_one("#table", AudioTable)
         row = table.get_df_row_at(table.cursor_row)
         issue_kind = row["Issue Kind"]
 
@@ -72,8 +79,8 @@ class Barback(App):  # type: ignore
         subprocess.call(["open", "-a", "iZotope RX 10 Audio Editor"] + file_paths)
 
     def action_open_in_reason(self) -> None:
-        table = self.query_one("#table", DataFrameTable)
-        filename = safe_absolute_path(table.get_df_row_at(table.cursor_row))
+        table: AudioTable = self.query_one("#table", AudioTable)
+        filename = table.get_cell_data(table.cursor_row, "file").filename
         self.info(f"Opening {os.path.basename(filename)} in Reason")
         subprocess.call(
             [
@@ -85,8 +92,8 @@ class Barback(App):  # type: ignore
         )
 
     def action_open_in_finder(self) -> None:
-        table = self.query_one("#table", DataFrameTable)
-        filename = safe_absolute_path(table.get_df_row_at(table.cursor_row))
+        table: AudioTable = self.query_one("#table", AudioTable)
+        filename = table.get_cell_data(table.cursor_row, "file").filename
         self.info(f"Revealing {os.path.basename(filename)} in Finder")
         subprocess.call(
             [
@@ -98,7 +105,8 @@ class Barback(App):  # type: ignore
         )
 
     def on_tree_node_highlighted(self, message: FileTree.NodeHighlighted) -> None:  # type: ignore
-        table = self.query_one("#table")
+        print(f"tree_node_highlighted {message}")
+        table = self.query_one("#table", AudioTable)
         if message.node.is_root:
             self.state.selected_dir = self.state.audio_dir
         elif message.node.data is not None:
@@ -110,6 +118,7 @@ class Barback(App):  # type: ignore
             table.focus()
 
     def on_button_pressed(self, message: Button.Pressed) -> None:
+        print(f"button_pressed {message}")
         match message.button.id:
             case "files-button":
                 self.state.mode = Mode.FILES
@@ -126,6 +135,7 @@ class Barback(App):  # type: ignore
         self.post_message(TableUpdate("on_button_pressed"))
 
     def on_progress_bar_update(self, message: ProgressBarUpdate) -> None:
+        print(f"progress_bar_update {message}")
         progress_bar = self.query_one("#progress", ProgressBar)
         progress_bar.update(total=message.total, progress=message.progress)
 
@@ -134,48 +144,63 @@ class Barback(App):  # type: ignore
         progress_bar.advance(message.amount)
 
     def on_table_update(self, message: TableUpdate) -> None:
-        table = self.query_one("#table", DataFrameTable)
+        print(f"table_update {message}")
+        if not self.state.loaded:
+            return
+
+        table = self.query_one("#table", AudioTable)
         current_mode = self.state.mode
         current_dir = self.state.selected_dir
 
+        if current_dir == self.state.audio_dir:
+            filtered_data = self.state.audio_data
+        else:
+            filtered_data = self.state.audio_data.filter_by_dir(self.state.selected_dir)
+
         match current_mode:
             case Mode.FILES:
-                df = filter_df_by_dir(self.state.audio_data, current_dir)
-                table.set_df(
-                    df,
-                    columns=["File", "Duration", "Sample rate", "Bit depth"],
-                    sort_col="File",
-                    sort_asc=True,
+                table.update_table(
+                    filtered_data,
+                    columns=["file", "duration", "sample_rate", "bit_depth"],
+                    sort_by="file",
+                    direction="asc",
                 )
             case Mode.LOOPS:
-                df = filter_df_by_dir(self.state.audio_data, current_dir)
-                table.set_df(
-                    df,
-                    columns=["File", "Loop", "BPM", "Bars", "ZC"],
-                    sort_col="File",
-                    sort_asc=True,
+                table.update_table(
+                    filtered_data,
+                    columns=["file", "loop", "bpm", "bars", "zc"],
+                    sort_by="file",
+                    direction="asc",
                 )
             case Mode.DUPLICATES:
-                df = self.state.duplicate_data
-                table.set_df(df, sort_col="Similarity", sort_asc=False)
+                pass
             case Mode.FINALIZER:
-                df = self.state.finalizer_data
-                table.set_df(
-                    df,
-                    columns=["File", "Issue Kind", "Message"],
-                    sort_col=["Issue Kind", "File"],
-                    sort_asc=True,
+                table.update_table(
+                    filtered_data,
+                    columns=["file", "finalizer_issues"],
+                    sort_by="file",
+                    direction="asc",
                 )
+
             case Mode.EXTENDER:
                 pass
         table.focus()
 
+    def on_file_changed(self, message: FileChanged) -> None:
+        print(message)
+        self.info(
+            f"{message.path.name} was {message.change_type} on disk at {datetime.now().strftime('%H:%M:%S')}"
+        )
+        # refresh_file(self, self.state, message.path)
+
     def info(self, text: str) -> None:
+        print(text)
         info_box = self.query_one("#info", InfoBox)
         info_box.update(text)
 
     def on_mount(self) -> None:
         init_audio_data(self, self.state)
+        watch_files(self, self.state)
 
     def compose(self) -> ComposeResult:
         yield Header()
@@ -194,7 +219,7 @@ class Barback(App):  # type: ignore
         )
         yield Rule(line_style="ascii", id="rule")
         yield Container(
-            DataFrameTable(id="table"),
+            AudioTable(id="table"),
             FileTree(self.state.audio_dir, id="tree"),
             id="body",
         )
@@ -202,3 +227,4 @@ class Barback(App):  # type: ignore
 
     def on_unmount(self) -> None:
         self.state.executor.shutdown()
+        self.workers.cancel_all()

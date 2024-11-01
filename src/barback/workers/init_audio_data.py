@@ -3,13 +3,28 @@ from concurrent.futures import ProcessPoolExecutor
 from multiprocessing import cpu_count
 from pathlib import Path
 
-import pandas as pd
 from textual import work
 
+from barback.audio_data import AudioDataRow
 from barback.audio_file import AudioFile
-from barback.messages import ProgressBarAdvance, ProgressBarUpdate, TableUpdate
 from barback.state import BarbackState
-from barback.util import BarbackProtocol, get_valid_audio_files
+from barback.util.messages import ProgressBarAdvance, ProgressBarUpdate, TableUpdate
+from barback.util.protocol import BarbackProtocol
+
+
+def get_valid_audio_files(dirname: Path) -> list[Path]:
+    valid_extensions = (".mp3", ".flac", ".wav", ".aif", ".aiff")
+    if dirname.is_dir():
+        files = [
+            file.absolute()
+            for file in dirname.rglob("*")
+            if file.is_file() and file.suffix.lower() in valid_extensions
+        ]
+        if not files:
+            return []
+        return files
+    else:
+        return []
 
 
 @work
@@ -30,15 +45,15 @@ async def init_audio_data(app: BarbackProtocol, state: BarbackState) -> None:
     results = await asyncio.gather(*tasks)
     # results = [await _proc(file) for file in audio_files]
 
-    new_data = pd.DataFrame(results, columns=["File"])
-    new_data["Duration"] = new_data["File"].apply(lambda x: x.duration)
-    new_data["Sample rate"] = new_data["File"].apply(lambda x: x.sample_rate)
-    new_data["Bit depth"] = new_data["File"].apply(lambda x: x.bit_depth)
-    state.audio_data = (
-        pd.concat([state.audio_data, new_data], ignore_index=True)
-        .infer_objects()
-        .fillna("")
-    )
+    for af in results:
+        state.audio_data.add_row(
+            AudioDataRow(
+                file=af,
+                duration=af.duration,
+                sample_rate=af.sample_rate,
+                bit_depth=af.bit_depth,
+            )
+        )
 
     app.info(f"Barback has started, indexing {len(audio_files)} files")
     app.post_message(TableUpdate("init_audio_data"))

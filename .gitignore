@@ -1,7 +1,9 @@
 **/.DS_Store
-venv
 __pycache__
 *.wav
 testpack/
-**/.mypy_cache/
 .vscode/
+**/.mypy_cache/
+.venv/
+.python-version
+uv.lock

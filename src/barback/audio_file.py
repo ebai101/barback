@@ -2,13 +2,13 @@ import os
 import re
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional, Tuple
 
 import librosa
 import numpy as np
 import soundfile as sf
 from numpy.typing import NDArray
-from typing_extensions import Self
+
+from barback.util.types import LoopResponse
 
 # applies fades of a given type
 # def fade(buf, fade_dir, fade_type):
@@ -33,23 +33,23 @@ class AudioFileError(Exception):
     message: str
 
 
-@dataclass
-class IsLoopResponse:
-    filename: Path
-    is_loop: bool
-    response: str
-    bpm: Optional[int] = None
-    num_bars: Optional[int] = None
-
-
 class AudioFile:
 
     def __init__(self, filename: Path):
         self.filename = filename
-        self.sample_rate = librosa.get_samplerate(self.filename)
-        self.bit_depth = sf.info(self.filename).subtype
-        self.duration = librosa.get_duration(path=self.filename)
         self.loaded = False
+
+    @property
+    def duration(self) -> float:
+        return librosa.get_duration(path=self.filename)
+
+    @property
+    def sample_rate(self) -> float:
+        return librosa.get_samplerate(self.filename)
+
+    @property
+    def bit_depth(self) -> str:
+        return str(sf.info(self.filename).subtype)
 
     def load(self, sample_rate: float = 0, mono: bool = False) -> None:
         if self.loaded:
@@ -73,7 +73,7 @@ class AudioFile:
         self.loaded = False
 
     def __str__(self) -> str:
-        return os.path.basename(self.filename)
+        return self.filename.name
 
     def calc_zero_crossings(self) -> float:
         if not hasattr(self, "audio"):
@@ -98,7 +98,7 @@ class AudioFile:
         )
         return int(onsets[0])
 
-    def weighted_similarity(self, target: Self) -> Tuple[str, str, float]:
+    def weighted_similarity(self, target: "AudioFile") -> tuple[str, str, float]:
         if not hasattr(self, "zero_crossings"):
             self.zero_crossings = self.calc_zero_crossings()
         if not hasattr(self, "chroma"):
@@ -141,7 +141,7 @@ class AudioFile:
         return self.filename.name, target.filename.name, result
 
     # returns a boolean (loopable/not loopable) and an error message if no BPM is found
-    def is_loop(self) -> IsLoopResponse:
+    def is_loop(self) -> LoopResponse:
         if not hasattr(self, "audio"):
             raise AudioFileError(f"{self.filename} is not loaded")
         # find bpm - return early if no valid bpm found
@@ -152,9 +152,9 @@ class AudioFile:
             if 60 <= number <= 299:
                 bpm = number
             else:
-                return IsLoopResponse(self.filename, False, "bpm out of range")
+                return LoopResponse(self.filename, False, "bpm out of range")
         else:
-            return IsLoopResponse(self.filename, False, "no bpm found")
+            return LoopResponse(self.filename, False, "no bpm found")
 
         # calculate samples/bar (assuming 4 beats/bar) and number of bars
         bar_len_samples = self.sample_rate * ((60 / bpm) * 4.0)
@@ -168,9 +168,9 @@ class AudioFile:
         is_loopable = difference <= 1.0
 
         if is_loopable:
-            return IsLoopResponse(self.filename, True, "yes", bpm, num_bars_rounded)
+            return LoopResponse(self.filename, True, "yes", bpm, num_bars_rounded)
         else:
-            return IsLoopResponse(
+            return LoopResponse(
                 self.filename,
                 False,
                 f"no (off by {difference:.2f} samples)",
@@ -217,7 +217,7 @@ class AudioFile:
     #     self.audio = new_audio
     #     self.save()
 
-    def get_start_end_silence(self) -> Tuple[float, float]:
+    def get_start_end_silence(self) -> tuple[float, float]:
         if not hasattr(self, "audio"):
             raise AudioFileError(f"{self.filename} is not loaded")
         audio_mono = librosa.to_mono(self.audio)
@@ -243,7 +243,7 @@ class AudioFile:
         else:
             sf.write(self.filename, self.audio, self.sample_rate, subtype="PCM_24")
 
-    def _get_sort_key(self) -> Tuple[int, str | int]:
+    def _get_sort_key(self) -> tuple[int, str | int]:
         filename = str(self.filename.name)
         match = re.search(r"^(?:.*?_)?[A-Z]+[A-Z][a-zA-Z]*_(\d+)(?:_.*)?$", filename)
         if match:
@@ -251,10 +251,10 @@ class AudioFile:
         else:
             return (1, filename)
 
-    def __lt__(self, other: Self) -> bool:
+    def __lt__(self, other: "AudioFile") -> bool:
         return self._get_sort_key() < other._get_sort_key()
 
-    def __gt__(self, other: Self) -> bool:
+    def __gt__(self, other: "AudioFile") -> bool:
         return self._get_sort_key() > other._get_sort_key()
 
     def __eq__(self, other: object) -> bool:
@@ -262,10 +262,10 @@ class AudioFile:
             return NotImplemented
         return self._get_sort_key() == other._get_sort_key()
 
-    def __le__(self, other: Self) -> bool:
+    def __le__(self, other: "AudioFile") -> bool:
         return self._get_sort_key() <= other._get_sort_key()
 
-    def __ge__(self, other: Self) -> bool:
+    def __ge__(self, other: "AudioFile") -> bool:
         return self._get_sort_key() >= other._get_sort_key()
 
     def __ne__(self, other: object) -> bool:

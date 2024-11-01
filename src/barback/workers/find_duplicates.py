@@ -2,16 +2,14 @@ import asyncio
 from concurrent.futures import ProcessPoolExecutor
 from itertools import combinations
 from multiprocessing import cpu_count
-from typing import Tuple
 
 import numpy as np
-import pandas as pd
 from textual import work
 
 from barback.audio_file import AudioFile
-from barback.messages import ProgressBarAdvance, ProgressBarUpdate, TableUpdate
 from barback.state import BarbackState
-from barback.util import BarbackProtocol
+from barback.util.messages import ProgressBarAdvance, ProgressBarUpdate, TableUpdate
+from barback.util.protocol import BarbackProtocol
 
 
 def find_duplicates_preproc(af: AudioFile) -> AudioFile:
@@ -27,7 +25,7 @@ def find_duplicates_preproc(af: AudioFile) -> AudioFile:
     return af
 
 
-def find_duplicates_proc(afA: AudioFile, afB: AudioFile) -> Tuple[str, str, float]:
+def find_duplicates_proc(afA: AudioFile, afB: AudioFile) -> tuple[str, str, float]:
     if abs(afA.duration - afB.duration) > 0.1:
         return afA.filename.name, afB.filename.name, 0.0
     s = afA.weighted_similarity(afB)
@@ -38,7 +36,7 @@ def find_duplicates_proc(afA: AudioFile, afB: AudioFile) -> Tuple[str, str, floa
 async def find_duplicates(app: BarbackProtocol, state: BarbackState) -> None:
     state.executor = ProcessPoolExecutor(max_workers=cpu_count())
 
-    files = state.audio_data["File"].tolist()
+    files = state.audio_data.get_files()
     total_tasks = len(files)
     app.post_message(ProgressBarUpdate(total_tasks, 0))
 
@@ -60,7 +58,7 @@ async def find_duplicates(app: BarbackProtocol, state: BarbackState) -> None:
     total_tasks = len(file_combinations)
     app.post_message(ProgressBarUpdate(total_tasks, 0))
 
-    async def _proc(combination: Tuple[int, int]) -> Tuple[str, str, float]:
+    async def _proc(combination: tuple[int, int]) -> tuple[str, str, float]:
         loop = asyncio.get_event_loop()
         try:
             result = await loop.run_in_executor(

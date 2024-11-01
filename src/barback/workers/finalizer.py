@@ -2,25 +2,16 @@ import asyncio
 import os
 import re
 from concurrent.futures import ProcessPoolExecutor
-from dataclasses import dataclass
 from multiprocessing import cpu_count
 from pathlib import Path
 
-import pandas as pd
 from textual import work
 
 from barback.audio_file import AudioFile
-from barback.messages import ProgressBarAdvance, ProgressBarUpdate, TableUpdate
 from barback.state import BarbackState
-from barback.util import BarbackProtocol
-
-
-@dataclass
-class FinalizerIssue:
-    name: str
-    path: Path
-    kind: str
-    message: str
+from barback.util.messages import ProgressBarAdvance, ProgressBarUpdate, TableUpdate
+from barback.util.protocol import BarbackProtocol
+from barback.util.types import FinalizerIssue, FinalizerIssueKind
 
 
 # wav, 44.1, 24 bit
@@ -99,12 +90,12 @@ def final_check_tonal_loop_key_signature(af: AudioFile) -> list[str]:
     return issues
 
 
-def finalizer_proc(af: AudioFile) -> list[FinalizerIssue]:
+def finalizer_proc(af: AudioFile) -> tuple[Path, list[FinalizerIssue]]:
     issues = []
     af.load(mono=True)
 
-    def append_issue(issue: str, message: str) -> None:
-        issues.append(FinalizerIssue(af.filename.name, af.filename, issue, message))
+    def append_issue(issue: FinalizerIssueKind, message: str) -> None:
+        issues.append(FinalizerIssue(issue, message))
 
     for i in final_check_file_sr_bd(af):
         append_issue("SR/BD", i)
@@ -115,44 +106,37 @@ def finalizer_proc(af: AudioFile) -> list[FinalizerIssue]:
     for i in final_check_loops(af):
         append_issue("Loop", i)
     for i in final_check_tonal_loop_key_signature(af):
-        append_issue("Key Sig", i)
+        append_issue("Key sig", i)
 
     af.unload()
-    return issues
+    return af.filename, issues
 
 
 @work
 async def finalizer(app: BarbackProtocol, state: BarbackState) -> None:
     state.executor = ProcessPoolExecutor(max_workers=cpu_count())
-    files = state.audio_data["File"].tolist()
+    files = state.audio_data.get_files()
     total_tasks = len(files)
     app.info("Running finalizer")
     app.post_message(ProgressBarUpdate(total_tasks, 0))
 
-    async def _proc(file: AudioFile) -> list[FinalizerIssue]:
+    async def _proc(af: AudioFile) -> tuple[Path, list[FinalizerIssue]]:
         loop = asyncio.get_event_loop()
-        result = await loop.run_in_executor(state.executor, finalizer_proc, file)
+        result = await loop.run_in_executor(state.executor, finalizer_proc, af)
         app.post_message(ProgressBarAdvance(1))
         return result
 
     tasks = [_proc(file) for file in files]
     results = await asyncio.gather(*tasks)
+    results_dict = {r[0]: r[1] for r in results}
     # results = [finalize(file) for file in files]
 
-    new_rows = []
-    for issues_list in results:
+    for af in results_dict.keys():
+        issues_list = results_dict[af]
         if len(issues_list) == 0:
             continue
-        for issue in issues_list:
-            new_rows.append(
-                {
-                    "File": issue.name,
-                    "Full Path": issue.path,
-                    "Issue Kind": issue.kind,
-                    "Message": issue.message,
-                }
-            )
-    state.finalizer_data = pd.DataFrame(new_rows)
+        state.audio_data.update_row(af, finalizer_issues=issues_list)
+
     app.post_message(TableUpdate("finalizer"))
     app.info("Done running finalizer")
 
