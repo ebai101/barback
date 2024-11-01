@@ -15,7 +15,7 @@ class DataFrameTable(DataTable):  # type: ignore
     _display_df: pd.DataFrame
     _current_df: pd.DataFrame
     _current_cols: list[str]
-    _current_sort_col: str
+    _current_sort_col: str | list[str]
     _current_sort_asc: bool
 
     def __init__(self, id: str = "") -> None:
@@ -31,7 +31,7 @@ class DataFrameTable(DataTable):  # type: ignore
         self,
         df: pd.DataFrame,
         columns: list[str] | None = None,
-        sort_col: str | None = None,
+        sort_col: str | list[str] | None = None,
         sort_asc: bool | None = None,
     ) -> None:
         self._current_df = df
@@ -58,7 +58,13 @@ class DataFrameTable(DataTable):  # type: ignore
 
     def _refresh_table(self) -> None:
         if not self._current_df.empty:
-            if self._current_sort_col in self._current_df.columns:
+            if isinstance(self._current_sort_col, str):
+                has_cols = self._current_sort_col in self._current_df.columns
+            else:
+                has_cols = all(
+                    col in self._current_df.columns for col in self._current_sort_col
+                )
+            if has_cols:
                 self._current_df = self._current_df.sort_values(
                     by=self._current_sort_col,
                     ascending=self._current_sort_asc,

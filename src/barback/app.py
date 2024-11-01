@@ -23,6 +23,7 @@ class Barback(App):  # type: ignore
     BINDINGS = [
         Binding("q", "quit", "Quit", show=False, priority=True),
         Binding("x", "open_in_rx", "RX"),
+        Binding("X", "open_all_issue_type_in_rx", "RX (All Issue Type)"),
         Binding("r", "open_in_reason", "Reason"),
         Binding("f", "open_in_finder", "Finder"),
         Binding("L", "check_loops", "Check Loops"),
@@ -52,6 +53,23 @@ class Barback(App):  # type: ignore
         filename = safe_absolute_path(table.get_df_row_at(table.cursor_row))
         self.info(f"Opening {os.path.basename(filename)} in RX")
         subprocess.call(["open", "-a", "iZotope RX 10 Audio Editor", str(filename)])
+
+    def action_open_all_issue_type_in_rx(self) -> None:
+        if self.state.mode != Mode.FINALIZER:
+            return
+        table: DataFrameTable = self.query_one("#table", DataFrameTable)
+        row = table.get_df_row_at(table.cursor_row)
+        issue_kind = row["Issue Kind"]
+
+        df = table.get_df()
+        file_paths = df[df["Issue Kind"] == issue_kind]["Full Path"].tolist()
+        if len(file_paths) > 32:
+            old_len = len(file_paths)
+            file_paths = file_paths[:32]
+            self.info(f"Opening first 32 {issue_kind} issues in RX ({old_len} total)")
+        else:
+            self.info(f"Opening all {issue_kind} issues in RX")
+        subprocess.call(["open", "-a", "iZotope RX 10 Audio Editor"] + file_paths)
 
     def action_open_in_reason(self) -> None:
         table = self.query_one("#table", DataFrameTable)
@@ -143,7 +161,10 @@ class Barback(App):  # type: ignore
             case Mode.FINALIZER:
                 df = self.state.finalizer_data
                 table.set_df(
-                    df, columns=["File", "Issues"], sort_col="File", sort_asc=True
+                    df,
+                    columns=["File", "Issue Kind", "Message"],
+                    sort_col=["Issue Kind", "File"],
+                    sort_asc=True,
                 )
             case Mode.EXTENDER:
                 pass

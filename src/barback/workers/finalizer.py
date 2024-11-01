@@ -2,9 +2,9 @@ import asyncio
 import os
 import re
 from concurrent.futures import ProcessPoolExecutor
+from dataclasses import dataclass
 from multiprocessing import cpu_count
 from pathlib import Path
-from typing import Tuple
 
 import pandas as pd
 from textual import work
@@ -13,6 +13,14 @@ from barback.audio_file import AudioFile
 from barback.messages import ProgressBarAdvance, ProgressBarUpdate, TableUpdate
 from barback.state import BarbackState
 from barback.util import BarbackProtocol
+
+
+@dataclass
+class FinalizerIssue:
+    name: str
+    path: Path
+    kind: str
+    message: str
 
 
 # wav, 44.1, 24 bit
@@ -91,26 +99,26 @@ def final_check_tonal_loop_key_signature(af: AudioFile) -> list[str]:
     return issues
 
 
-def finalizer_proc(af: AudioFile) -> Tuple[str, Path, list[str]]:
+def finalizer_proc(af: AudioFile) -> list[FinalizerIssue]:
     issues = []
     af.load(mono=True)
 
-    def append_issue(i: str) -> None:
-        issues.append(i)
+    def append_issue(issue: str, message: str) -> None:
+        issues.append(FinalizerIssue(af.filename.name, af.filename, issue, message))
 
     for i in final_check_file_sr_bd(af):
-        append_issue(i)
+        append_issue("SR/BD", i)
     for i in final_check_silence(af):
-        append_issue(i)
+        append_issue("Silence", i)
     for i in final_check_start_end_zero_crossing(af):
-        append_issue(i)
+        append_issue("ZC", i)
     for i in final_check_loops(af):
-        append_issue(i)
+        append_issue("Loop", i)
     for i in final_check_tonal_loop_key_signature(af):
-        append_issue(i)
+        append_issue("Key Sig", i)
 
     af.unload()
-    return af.filename.name, af.filename, issues
+    return issues
 
 
 @work
@@ -121,7 +129,7 @@ async def finalizer(app: BarbackProtocol, state: BarbackState) -> None:
     app.info("Running finalizer")
     app.post_message(ProgressBarUpdate(total_tasks, 0))
 
-    async def _proc(file: AudioFile) -> Tuple[str, Path, list[str]]:
+    async def _proc(file: AudioFile) -> list[FinalizerIssue]:
         loop = asyncio.get_event_loop()
         result = await loop.run_in_executor(state.executor, finalizer_proc, file)
         app.post_message(ProgressBarAdvance(1))
@@ -132,12 +140,17 @@ async def finalizer(app: BarbackProtocol, state: BarbackState) -> None:
     # results = [finalize(file) for file in files]
 
     new_rows = []
-    for file_name, full_path, issues_list in results:
+    for issues_list in results:
         if len(issues_list) == 0:
             continue
         for issue in issues_list:
             new_rows.append(
-                {"File": file_name, "Full Path": full_path, "Issues": issue}
+                {
+                    "File": issue.name,
+                    "Full Path": issue.path,
+                    "Issue Kind": issue.kind,
+                    "Message": issue.message,
+                }
             )
     state.finalizer_data = pd.DataFrame(new_rows)
     app.post_message(TableUpdate("finalizer"))
