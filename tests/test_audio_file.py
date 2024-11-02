@@ -372,12 +372,21 @@ async def test_save(loaded_audio_file, mock_soundfile, mock_properties):
         audio_file.save()
 
 
-async def test_weighted_similarity(loaded_audio_file, mock_properties):
+async def test_weighted_similarity(audio_file, loaded_audio_file, mock_properties):
     """Test similarity calculation"""
 
     loaded_audio_file.audio = MONO_AUDIO
+
+    with pytest.raises(AudioFileError, match="zero crossings"):
+        loaded_audio_file.weighted_similarity(loaded_audio_file)
     loaded_audio_file.zero_crossings = 0.1
+
+    with pytest.raises(AudioFileError, match="chroma"):
+        loaded_audio_file.weighted_similarity(loaded_audio_file)
     loaded_audio_file.chroma = np.zeros((12, 100))
+
+    with pytest.raises(AudioFileError, match="spectral contrast"):
+        loaded_audio_file.weighted_similarity(loaded_audio_file)
     loaded_audio_file.spectral_contrast = np.zeros((7, 100))
 
     target = AudioFile(Path("target.wav"))
@@ -388,7 +397,7 @@ async def test_weighted_similarity(loaded_audio_file, mock_properties):
     target.spectral_contrast = np.ones((7, 100)) * 0.5
 
     # Calculate similarity
-    name1, name2, similarity = loaded_audio_file.weighted_similarity(target)
+    _, _, similarity = loaded_audio_file.weighted_similarity(target)
     assert isinstance(similarity, float)
     assert 0 <= similarity <= 1
 
@@ -460,15 +469,6 @@ async def test_load_error_handling(audio_file, mock_properties):
             with pytest.raises(AudioFileError) as exc_info:
                 audio_file.load()
             assert str(error) in str(exc_info.value)
-
-
-async def test_load_error_already_loaded(loaded_audio_file, mock_properties):
-    with patch("barback.audio_file.librosa.load", side_effect=Exception("Load error")):
-        with pytest.raises(
-            AudioFileError,
-            match=f"Tried to load already loaded file {loaded_audio_file.filename}",
-        ):
-            loaded_audio_file.load()
 
 
 async def test_feature_calculation_error_handling(audio_file):

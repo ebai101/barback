@@ -3,7 +3,8 @@ __pycache__
 *.wav
 testpack/
 .vscode/
-**/.mypy_cache/
+**/.mypy_cache
+**/.pytest_cache
 .venv/
 .python-version
 uv.lock

@@ -82,12 +82,20 @@ class AudioFile:
         return int(onsets[0])
 
     def weighted_similarity(self, target: "AudioFile") -> tuple[str, str, float]:
+        if not self.loaded:
+            raise AudioFileError(f"{self.filename} is not loaded")
         if not hasattr(self, "zero_crossings"):
-            self.zero_crossings = self.calc_zero_crossings()
+            raise AudioFileError(
+                "Must calculate zero crossings before running weighted_similarity"
+            )
         if not hasattr(self, "chroma"):
-            self.chroma = self.calc_chroma()
+            raise AudioFileError(
+                "Must calculate chroma before running weighted_similarity"
+            )
         if not hasattr(self, "spectral_contrast"):
-            self.spectral_contrast = self.calc_spectral_contrast()
+            raise AudioFileError(
+                "Must calculate spectral contrast before running weighted_similarity"
+            )
 
         # zero crossing
         zcr_similarity = 1 - np.abs(self.zero_crossings - target.zero_crossings)
