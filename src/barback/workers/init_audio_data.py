@@ -8,7 +8,12 @@ from textual import work
 from barback.audio_data import AudioDataRow
 from barback.audio_file import AudioFile
 from barback.state import BarbackState
-from barback.util.messages import ProgressBarAdvance, ProgressBarUpdate, TableUpdate
+from barback.util.messages import (
+    BarbackLoaded,
+    ProgressBarAdvance,
+    ProgressBarUpdate,
+    TableUpdate,
+)
 from barback.util.protocol import BarbackProtocol
 
 
@@ -16,7 +21,7 @@ def get_valid_audio_files(dirname: Path) -> list[Path]:
     valid_extensions = (".mp3", ".flac", ".wav", ".aif", ".aiff")
     if dirname.is_dir():
         files = [
-            file.absolute()
+            file.resolve()
             for file in dirname.rglob("*")
             if file.is_file() and file.suffix.lower() in valid_extensions
         ]
@@ -56,6 +61,6 @@ async def init_audio_data(app: BarbackProtocol, state: BarbackState) -> None:
         )
 
     app.info(f"Barback has started, indexing {len(audio_files)} files")
+    app.post_message(BarbackLoaded())
     app.post_message(TableUpdate("init_audio_data"))
-    state.loaded = True
     state.executor.shutdown()

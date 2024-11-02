@@ -36,7 +36,7 @@ class AudioFileError(Exception):
 class AudioFile:
 
     def __init__(self, filename: Path):
-        self.filename = filename
+        self.filename = Path(filename)
         self.loaded = False
 
     @property

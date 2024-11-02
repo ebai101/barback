@@ -26,3 +26,7 @@ class FileChanged(Message):
     path: Path
     change_type: str = "modified"
     old_path: Optional[Path] = None
+
+
+class BarbackLoaded(Message):
+    pass

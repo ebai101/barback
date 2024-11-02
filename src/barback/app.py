@@ -10,6 +10,7 @@ from textual.widgets import Button, Footer, Header, ProgressBar, Rule
 
 from barback.state import BarbackState, Mode
 from barback.util.messages import (
+    BarbackLoaded,
     FileChanged,
     ProgressBarAdvance,
     ProgressBarUpdate,
@@ -133,6 +134,10 @@ class Barback(App):  # type: ignore
             case _:
                 raise ValueError(f"Unexpected button press: #{message.button.id}")
         self.post_message(TableUpdate("on_button_pressed"))
+
+    def on_barback_loaded(self, message: BarbackLoaded) -> None:
+        print("Barback successfully loaded")
+        self.state.loaded = True
 
     def on_progress_bar_update(self, message: ProgressBarUpdate) -> None:
         print(f"progress_bar_update {message}")

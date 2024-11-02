@@ -30,9 +30,13 @@ class AudioData:
         """Add a new row to the table."""
         self._data[str(row.file.filename)] = row
 
-    def get_row(self, file_path: Union[str, Path, AudioFile]) -> Optional[AudioDataRow]:
+    def get_row(self, file: Union[str, Path, AudioFile]) -> Optional[AudioDataRow]:
         """Get a row by file path."""
-        return self._data.get(str(file_path))
+        if isinstance(file, AudioFile):
+            path = str(file.filename)
+        else:
+            path = str(file)
+        return self._data.get(path)
 
     def get_files(self) -> list[AudioFile]:
         """Gets all the AudioFiles in the table."""
@@ -48,12 +52,16 @@ class AudioData:
 
         return [getattr(row, column) for row in self._data.values()]
 
-    def update_row(self, file_path: Union[str, Path, AudioFile], **kwargs: Any) -> bool:
+    def update_row(self, file: Union[str, Path, AudioFile], **kwargs: Any) -> bool:
         """
         Update an existing row with new values.
         Returns True if the row was found and updated, False otherwise.
         """
-        key = str(file_path)
+        if isinstance(file, AudioFile):
+            key = str(file.filename)
+        else:
+            key = str(file)
+
         if key in self._data:
             row = self._data[key]
             valid_fields = {f.name for f in fields(AudioDataRow)}
@@ -65,7 +73,6 @@ class AudioData:
 
     def filter_by_dir(self, directory: Union[str, Path]) -> "AudioData":
         """Return a new table containing only rows where the file is in the specified directory."""
-        directory = Path(directory).resolve()
         new_table = AudioData()
 
         for row in self._data.values():
@@ -114,6 +121,10 @@ class AudioData:
         """Iterate over all rows in the table."""
         return iter(self._data.values())
 
-    def __contains__(self, file_path: Union[str, Path, AudioFile]) -> bool:
+    def __contains__(self, file: Union[str, Path, AudioFile]) -> bool:
         """Check if a file exists in the table."""
-        return str(file_path) in self._data
+        if isinstance(file, AudioFile):
+            file = str(file.filename)
+        else:
+            file = str(file)
+        return str(file) in self._data
