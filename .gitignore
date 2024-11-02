@@ -7,3 +7,4 @@ testpack/
 .venv/
 .python-version
 uv.lock
+.coverage*

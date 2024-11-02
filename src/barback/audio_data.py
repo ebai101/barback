@@ -81,38 +81,6 @@ class AudioData:
 
         return new_table
 
-    def _get_sort_value(self, row: AudioDataRow, key: str) -> Any:
-        """Get the value to sort by, handling None values."""
-        value = getattr(row, key)
-        # Place None values at the end for ascending, start for descending
-        if value is None:
-            return float("inf")
-        return value
-
-    def _get_sort_key(
-        self,
-        sort_by: Union[str, list[str]],
-        direction: Union[SortDirection, list[SortDirection]],
-    ) -> Any:
-        """
-        Create a sort key function that sorts by multiple columns in order.
-        Each subsequent sort preserves the order of equal elements from previous sorts.
-        """
-        # Convert to lists for consistent handling
-        sort_keys = [sort_by] if isinstance(sort_by, str) else sort_by
-        directions = [direction] if isinstance(direction, str) else direction
-
-        if len(directions) == 1:
-            directions = directions * len(sort_keys)
-
-        def key_func(row: AudioDataRow) -> Any:
-            return tuple(
-                (1 if d == "desc" else -1) * self._get_sort_value(row, k)
-                for k, d in zip(sort_keys, directions)
-            )
-
-        return key_func
-
     def __len__(self) -> int:
         """Return the number of rows in the table."""
         return len(self._data)

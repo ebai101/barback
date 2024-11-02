@@ -10,23 +10,6 @@ from numpy.typing import NDArray
 
 from barback.util.types import LoopResponse
 
-# applies fades of a given type
-# def fade(buf, fade_dir, fade_type):
-#     if fade_dir not in ["in", "out"]:
-#         raise ValueError('fade_dir must be "in" or "out"')
-
-#     match fade_type:
-#         case "linear":
-#             fade = np.linspace(0, 1, len(buf))
-#         case "cosine":
-#             fade = 0.5 * np.cos(np.pi * np.linspace(1, 0, len(buf))) + 0.5
-#         case _:
-#             raise ValueError("unsupported fade_type")
-
-#     if fade_dir == "out":
-#         return buf * fade[::-1]
-#     return buf * fade
-
 
 @dataclass
 class AudioFileError(Exception):
@@ -76,22 +59,22 @@ class AudioFile:
         return self.filename.name
 
     def calc_zero_crossings(self) -> float:
-        if not hasattr(self, "audio"):
+        if not self.loaded:
             raise AudioFileError(f"{self.filename} is not loaded")
         return float(np.mean(np.abs(np.diff(np.sign(self.audio))) > 0))
 
     def calc_chroma(self) -> NDArray[np.float32]:
-        if not hasattr(self, "audio"):
+        if not self.loaded:
             raise AudioFileError(f"{self.filename} is not loaded")
         return librosa.feature.chroma_cqt(y=self.audio, sr=self.sample_rate)
 
     def calc_spectral_contrast(self) -> NDArray[np.float32]:
-        if not hasattr(self, "audio"):
+        if not self.loaded:
             raise AudioFileError(f"{self.filename} is not loaded")
         return librosa.feature.spectral_contrast(y=self.audio, sr=self.sample_rate)
 
     def calc_first_onset(self) -> int:
-        if not hasattr(self, "audio"):
+        if not self.loaded:
             raise AudioFileError(f"{self.filename} is not loaded")
         onsets = librosa.onset.onset_detect(
             y=librosa.to_mono(self.audio), sr=self.sample_rate, units="samples"
@@ -142,7 +125,7 @@ class AudioFile:
 
     # returns a boolean (loopable/not loopable) and an error message if no BPM is found
     def is_loop(self) -> LoopResponse:
-        if not hasattr(self, "audio"):
+        if not self.loaded:
             raise AudioFileError(f"{self.filename} is not loaded")
         # find bpm - return early if no valid bpm found
         bpm_regex = r"^(?:.*?_)?[A-Z]+[A-Z][a-zA-Z]*_(\d+)(?:_.*)?$"
@@ -165,7 +148,7 @@ class AudioFile:
         # check the file length against the expected value
         expected_samples = num_bars_rounded * bar_len_samples
         difference = abs(total_samples - expected_samples)
-        is_loopable = difference <= 1.0
+        is_loopable = difference < 1.0
 
         if is_loopable:
             return LoopResponse(self.filename, True, "yes", bpm, num_bars_rounded)
@@ -179,7 +162,7 @@ class AudioFile:
             )
 
     def get_start_end_zero_crossing(self, threshold: float = 0.02) -> str:
-        if not hasattr(self, "audio"):
+        if not self.loaded:
             raise AudioFileError(f"{self.filename} is not loaded")
         if len(self.audio.shape) > 1:
             start_non_zero = any(abs(s) > threshold for s in self.audio[0])
@@ -218,25 +201,26 @@ class AudioFile:
     #     self.save()
 
     def get_start_end_silence(self) -> tuple[float, float]:
-        if not hasattr(self, "audio"):
+        if not self.loaded:
             raise AudioFileError(f"{self.filename} is not loaded")
         audio_mono = librosa.to_mono(self.audio)
-        audio_mono_trim, index = librosa.effects.trim(audio_mono, top_db=75)
-        if librosa.get_duration(
-            y=audio_mono, sr=self.sample_rate
-        ) == librosa.get_duration(y=audio_mono_trim, sr=self.sample_rate):
-            return 0, 0
+        non_silent = librosa.effects._signal_to_frame_nonsilent(audio_mono, top_db=75)
+
+        nonzero = np.flatnonzero(non_silent)
+
+        if nonzero.size > 0:
+            start = int(librosa.core.frames_to_samples(nonzero[0]))
+            end = len(audio_mono) - min(
+                audio_mono.shape[-1],
+                int(librosa.core.frames_to_samples(nonzero[-1] + 1)),
+            )
         else:
-            start = 0
-            end = 0
-            if index[0] > 0:
-                start = index[0]
-            if index[1] != len(audio_mono):
-                end = len(audio_mono) - index[1]
-            return start, end
+            start, end = 0, len(audio_mono)
+
+        return start, end
 
     def save(self) -> None:
-        if not hasattr(self, "audio"):
+        if not self.loaded:
             raise AudioFileError(f"{self.filename} is not loaded")
         if len(self.audio.shape) > 1:
             sf.write(self.filename, self.audio.T, self.sample_rate, subtype="PCM_24")
