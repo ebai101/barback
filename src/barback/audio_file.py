@@ -58,44 +58,49 @@ class AudioFile:
     def __str__(self) -> str:
         return self.filename.name
 
-    def calc_zero_crossings(self) -> float:
+    @property
+    def zero_crossings(self) -> float:
         if not self.loaded:
             raise AudioFileError(f"{self.filename} is not loaded")
-        return float(np.mean(np.abs(np.diff(np.sign(self.audio))) > 0))
+        if not hasattr(self, "_zero_crossings"):
+            self._zero_crossings = float(
+                np.mean(np.abs(np.diff(np.sign(self.audio))) > 0)
+            )
+        return self._zero_crossings
 
-    def calc_chroma(self) -> NDArray[np.float32]:
+    @property
+    def chroma(self) -> NDArray[np.float32]:
         if not self.loaded:
             raise AudioFileError(f"{self.filename} is not loaded")
-        return librosa.feature.chroma_cqt(y=self.audio, sr=self.sample_rate)
+        if not hasattr(self, "_chroma"):
+            self._chroma = librosa.feature.chroma_cqt(y=self.audio, sr=self.sample_rate)
+        return self._chroma
 
-    def calc_spectral_contrast(self) -> NDArray[np.float32]:
+    @property
+    def spectral_contrast(self) -> NDArray[np.float32]:
         if not self.loaded:
             raise AudioFileError(f"{self.filename} is not loaded")
-        return librosa.feature.spectral_contrast(y=self.audio, sr=self.sample_rate)
+        if not hasattr(self, "_spectral_contrast"):
+            self._spectral_contrast = librosa.feature.spectral_contrast(
+                y=self.audio, sr=self.sample_rate
+            )
+        return self._spectral_contrast
 
-    def calc_first_onset(self) -> int:
+    @property
+    def first_onset(self) -> int:
         if not self.loaded:
             raise AudioFileError(f"{self.filename} is not loaded")
-        onsets = librosa.onset.onset_detect(
-            y=librosa.to_mono(self.audio), sr=self.sample_rate, units="samples"
-        )
-        return int(onsets[0])
+        if not hasattr(self, "_first_onset"):
+            self._first_onset = int(
+                librosa.onset.onset_detect(
+                    y=librosa.to_mono(self.audio), sr=self.sample_rate, units="samples"
+                )[0]
+            )
+        return self._first_onset
 
     def weighted_similarity(self, target: "AudioFile") -> tuple[str, str, float]:
         if not self.loaded:
             raise AudioFileError(f"{self.filename} is not loaded")
-        if not hasattr(self, "zero_crossings"):
-            raise AudioFileError(
-                "Must calculate zero crossings before running weighted_similarity"
-            )
-        if not hasattr(self, "chroma"):
-            raise AudioFileError(
-                "Must calculate chroma before running weighted_similarity"
-            )
-        if not hasattr(self, "spectral_contrast"):
-            raise AudioFileError(
-                "Must calculate spectral contrast before running weighted_similarity"
-            )
 
         # zero crossing
         zcr_similarity = 1 - np.abs(self.zero_crossings - target.zero_crossings)

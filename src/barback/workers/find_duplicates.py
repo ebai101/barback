@@ -8,7 +8,7 @@ from textual import work
 
 from barback.audio_file import AudioFile
 from barback.state import BarbackState
-from barback.util.messages import ProgressBarAdvance, ProgressBarUpdate, TableUpdate
+from barback.util.messages import ProgressBarAdvance, ProgressBarUpdate
 from barback.util.protocol import BarbackProtocol
 
 
@@ -18,10 +18,6 @@ def find_duplicates_preproc(af: AudioFile) -> AudioFile:
         print(len(af.audio))
         pad_width = 1024 - len(af.audio)
         af.audio = np.pad(af.audio, (0, pad_width), mode="constant")
-
-    af.zero_crossings = af.calc_zero_crossings()
-    af.chroma = af.calc_chroma()
-    af.spectral_contrast = af.calc_spectral_contrast()
     return af
 
 
@@ -88,10 +84,11 @@ async def find_duplicates(app: BarbackProtocol, state: BarbackState) -> None:
         if r[2] > 0.9:
             new_data.append({"File": r[0], "File 2": r[1], "Similarity": r[2]})
 
-    state.duplicate_data = pd.DataFrame(new_data)
-    app.post_message(TableUpdate("find_duplicates"))
-    if not state.duplicate_data.empty:
-        app.info("Done finding duplicates")
-    else:
-        app.info("No duplicates found")
+    # TODO: implement duplicate data storage
+    # state.duplicate_data = pd.DataFrame(new_data)
+    # app.post_message(TableUpdate("find_duplicates"))
+    # if not state.duplicate_data.empty:
+    #     app.info("Done finding duplicates")
+    # else:
+    #     app.info("No duplicates found")
     state.executor.shutdown()

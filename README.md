@@ -4,8 +4,6 @@ back of the bar
 
 ## todo
 
-fix finalizer table indices
-
 screens for better keybinds/easier display, streamlined mode handling
 - i think i need multiple screens?
 - at least multiple tables. different instances to handle different data
@@ -21,3 +19,24 @@ implement extender
 implement file watcher
 
 add more cool shit
+
+protools session processor?
+something to make better stems out of pt sessions
+
+
+## first usage notes
+
+clickable column headers for sorting
+need validate path on open
+open all might be not respect selected dir
+have to reopen to rescan finalizer
+file updater is gonna be needed
+
+renaming files crashes:
+no such file or directory when trying to find old files
+
+if no such file, we should remove the audiofile instance from the lib
+
+but creation/removal of instances in the table should occur based on messages from the file handler
+
+maybe an audio display widget below the file tree? if at all possible lol

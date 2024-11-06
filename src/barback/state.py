@@ -4,7 +4,6 @@ from enum import Enum
 from multiprocessing import cpu_count
 from pathlib import Path
 
-
 from barback.audio_data import AudioData
 
 Mode = Enum("Mode", ["FILES", "LOOPS", "DUPLICATES", "FINALIZER", "EXTENDER"])

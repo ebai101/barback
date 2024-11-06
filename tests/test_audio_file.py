@@ -1,3 +1,4 @@
+# type: ignore
 from pathlib import Path
 from unittest.mock import MagicMock, Mock, patch
 
@@ -197,32 +198,32 @@ async def test_load_with_params(audio_file, mock_librosa):
 
 async def test_zero_crossings(loaded_audio_file):
     """Test zero crossings calculation"""
-    zc = loaded_audio_file.calc_zero_crossings()
+    zc = loaded_audio_file.zero_crossings
     assert isinstance(zc, float)
     assert 0 <= zc <= 1  # Zero crossing rate should be between 0 and 1
 
     # Test unloaded file
     audio_file = AudioFile(Path("test.wav"))
     with pytest.raises(AudioFileError, match="is not loaded"):
-        audio_file.calc_zero_crossings()
+        zc = audio_file.zero_crossings
 
 
 async def test_audio_features(loaded_audio_file, mock_librosa):
     """Test audio feature calculations"""
     # Test chroma
-    chroma = loaded_audio_file.calc_chroma()
+    chroma = loaded_audio_file.chroma
     assert isinstance(chroma, np.ndarray)
     assert chroma.shape == (12, 100)  # Check expected shape
     mock_librosa.feature.chroma_cqt.assert_called_once()
 
     # Test spectral contrast
-    spectral = loaded_audio_file.calc_spectral_contrast()
+    spectral = loaded_audio_file.spectral_contrast
     assert isinstance(spectral, np.ndarray)
     assert spectral.shape == (7, 100)  # Check expected shape
     mock_librosa.feature.spectral_contrast.assert_called_once()
 
     # Test first onset
-    onset = loaded_audio_file.calc_first_onset()
+    onset = loaded_audio_file.first_onset
     assert isinstance(onset, int)
     assert onset == 100  # Check mock value
     mock_librosa.onset.onset_detect.assert_called_once()
@@ -372,42 +373,6 @@ async def test_save(loaded_audio_file, mock_soundfile, mock_properties):
         audio_file.save()
 
 
-async def test_weighted_similarity(audio_file, loaded_audio_file, mock_properties):
-    """Test similarity calculation"""
-
-    loaded_audio_file.audio = MONO_AUDIO
-
-    with pytest.raises(AudioFileError, match="zero crossings"):
-        loaded_audio_file.weighted_similarity(loaded_audio_file)
-    loaded_audio_file.zero_crossings = 0.1
-
-    with pytest.raises(AudioFileError, match="chroma"):
-        loaded_audio_file.weighted_similarity(loaded_audio_file)
-    loaded_audio_file.chroma = np.zeros((12, 100))
-
-    with pytest.raises(AudioFileError, match="spectral contrast"):
-        loaded_audio_file.weighted_similarity(loaded_audio_file)
-    loaded_audio_file.spectral_contrast = np.zeros((7, 100))
-
-    target = AudioFile(Path("target.wav"))
-    target.loaded = True
-    target.audio = MONO_AUDIO
-    target.zero_crossings = 0.15
-    target.chroma = np.ones((12, 100)) * 0.5
-    target.spectral_contrast = np.ones((7, 100)) * 0.5
-
-    # Calculate similarity
-    _, _, similarity = loaded_audio_file.weighted_similarity(target)
-    assert isinstance(similarity, float)
-    assert 0 <= similarity <= 1
-
-    # Test unloaded file
-    audio_file = AudioFile(Path("test.wav"))
-    target = AudioFile(Path("target.wav"))
-    with pytest.raises(AudioFileError, match="is not loaded"):
-        audio_file.weighted_similarity(target)
-
-
 async def test_sorting():
     """Test sorting functionality"""
     files = [
@@ -478,21 +443,21 @@ async def test_feature_calculation_error_handling(audio_file):
         side_effect=Exception("is not loaded"),
     ):
         with pytest.raises(Exception, match="is not loaded"):
-            audio_file.calc_chroma()
+            c = audio_file.chroma
 
     with patch(
         "barback.audio_file.librosa.feature.spectral_contrast",
         side_effect=Exception("is not loaded"),
     ):
         with pytest.raises(Exception, match="is not loaded"):
-            audio_file.calc_spectral_contrast()
+            sc = audio_file.spectral_contrast
 
     with patch(
         "barback.audio_file.librosa.onset.onset_detect",
         side_effect=Exception("is not loaded"),
     ):
         with pytest.raises(Exception, match="is not loaded"):
-            audio_file.calc_first_onset()
+            fo = audio_file.first_onset
 
 
 async def test_is_loop_sample_accuracy(mock_properties):

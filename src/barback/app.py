@@ -8,6 +8,7 @@ from textual.binding import Binding
 from textual.containers import Container
 from textual.widgets import Button, Footer, Header, ProgressBar, Rule
 
+from barback.audio_file import AudioFile
 from barback.state import BarbackState, Mode
 from barback.util.messages import (
     BarbackLoaded,
@@ -57,20 +58,22 @@ class Barback(App):  # type: ignore
 
     def action_open_in_rx(self) -> None:
         table: AudioTable = self.query_one("#table", AudioTable)
-        filename = table.get_cell_data(table.cursor_row, "file").filename
+        filename: Path = table.get_cell_data(
+            table.cursor_row, "file", AudioFile
+        ).filename
         self.info(f"Opening {os.path.basename(filename)} in RX")
         subprocess.call(["open", "-a", "iZotope RX 10 Audio Editor", str(filename)])
 
     def action_open_all_issue_type_in_rx(self) -> None:
-        return
         if self.state.mode != Mode.FINALIZER:
             return
         table: AudioTable = self.query_one("#table", AudioTable)
-        row = table.get_df_row_at(table.cursor_row)
-        issue_kind = row["Issue Kind"]
-
-        df = table.get_df()
-        file_paths = df[df["Issue Kind"] == issue_kind]["Full Path"].tolist()
+        issue_kind = table.get_display_data(table.cursor_row, "Kind")
+        file_paths = [
+            row.file.filename
+            for row in table.audio_data
+            if any([issue.kind == issue_kind for issue in row.finalizer_issues])
+        ]
         if len(file_paths) > 32:
             old_len = len(file_paths)
             file_paths = file_paths[:32]
@@ -81,7 +84,7 @@ class Barback(App):  # type: ignore
 
     def action_open_in_reason(self) -> None:
         table: AudioTable = self.query_one("#table", AudioTable)
-        filename = table.get_cell_data(table.cursor_row, "file").filename
+        filename = table.get_cell_data(table.cursor_row, "file", AudioFile).filename
         self.info(f"Opening {os.path.basename(filename)} in Reason")
         subprocess.call(
             [
@@ -94,7 +97,7 @@ class Barback(App):  # type: ignore
 
     def action_open_in_finder(self) -> None:
         table: AudioTable = self.query_one("#table", AudioTable)
-        filename = table.get_cell_data(table.cursor_row, "file").filename
+        filename = table.get_cell_data(table.cursor_row, "file", AudioFile).filename
         self.info(f"Revealing {os.path.basename(filename)} in Finder")
         subprocess.call(
             [
@@ -174,7 +177,7 @@ class Barback(App):  # type: ignore
                 table.update_table(
                     filtered_data,
                     columns=["file", "loop", "bpm", "bars", "zc"],
-                    sort_by="file",
+                    sort_by=["loop", "file"],
                     direction="asc",
                 )
             case Mode.DUPLICATES:
