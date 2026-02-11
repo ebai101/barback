@@ -17,7 +17,6 @@ from barback.util.messages import (
 )
 from barback.validation import summarize_issues
 from barback.widgets.audio_table import AudioTable
-from barback.widgets.info_box import InfoBox
 from barback.workers.file_processor import init_audio_data
 from barback.workers.file_watcher import watch_files
 
@@ -49,7 +48,7 @@ class Barback(App):
         """Build the UI layout."""
         yield Header()
         yield Container(
-            InfoBox(id="info"),
+            Static(id="info"),
             Static(),
             Static(id="stats"),
             Static(),
@@ -74,7 +73,7 @@ class Barback(App):
 
     def info(self, text: str) -> None:
         """Update the info box with status messages."""
-        info_box = self.query_one("#info", InfoBox)
+        info_box = self.query_one("#info", Static)
         info_box.update(text)
 
     def update_stats(self, text: str) -> None:
