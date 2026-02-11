@@ -1,18 +1,17 @@
 from pathlib import Path
-import soundfile as sf
-import numpy as np
+
 import librosa
+import numpy as np
+import soundfile as sf
 from pedalboard import Pedalboard, load_plugin
 
 
 class AudioProcessor:
     def __init__(self):
-        # Try to find Goodhertz Good Dither plugin
         self.good_dither = self._load_goodhertz_plugin()
 
     def _load_goodhertz_plugin(self):
         """Locate and load Goodhertz Good Dither plugin."""
-        # Common AU/VST3 locations on macOS
         possible_paths = [
             "/Library/Audio/Plug-Ins/VST3/Ghz Good Dither 3.vst3",
             "~/Library/Audio/Plug-Ins/VST3/Ghz Good Dither 3.vst3",
@@ -37,58 +36,45 @@ class AudioProcessor:
         self, input_path: Path, target_sr: int = 44100, target_bits: int = 24
     ) -> None:
         """
-        Convert audio to target samplerate and bit depth IN-PLACE using Goodhertz dither.
+        Convert audio to target samplerate and bit depth by DELETE + RECREATE.
+        Mimics behavior of Myriad/RX to trigger file watcher properly.
 
         Args:
-            input_path: Source audio file (will be overwritten)
+            input_path: Source audio file (will be deleted and recreated)
             target_sr: Target sample rate (default: 44100)
             target_bits: Target bit depth (default: 24)
         """
-        # Read the audio file
         audio, sr = sf.read(input_path, always_2d=False)
 
-        # Step 1: Sample rate conversion if needed using librosa
         if sr != target_sr:
             audio = librosa.resample(
-                audio,
-                orig_sr=sr,
-                target_sr=target_sr,
-                res_type="kaiser_best",  # Highest quality resampling
+                audio, orig_sr=sr, target_sr=target_sr, res_type="kaiser_best"
             )
             sr = target_sr
 
-        # Step 2: Apply Goodhertz dither for bit depth reduction
         if self.good_dither is not None:
             audio = self._apply_goodhertz_dither(audio, sr, target_bits)
         else:
-            # Fallback: basic TPDF dithering
             audio = self._apply_basic_dither(audio, target_bits)
 
-        # Step 3: Write back to original file (in-place)
+        temp_file = input_path.with_suffix(".tmp.wav")
         subtype_map = {16: "PCM_16", 24: "PCM_24", 32: "PCM_32"}
-
-        sf.write(input_path, audio, sr, subtype=subtype_map.get(target_bits, "PCM_24"))
+        sf.write(temp_file, audio, sr, subtype=subtype_map.get(target_bits, "PCM_24"))
+        input_path.unlink()
+        temp_file.rename(input_path)
 
     def _apply_goodhertz_dither(
         self, audio: np.ndarray, sr: int, target_bits: int
     ) -> np.ndarray:
         """Apply Goodhertz Good Dither plugin."""
-        # Process audio through Goodhertz plugin
         board = Pedalboard([self.good_dither])
         processed = board(audio, sample_rate=sr)
-
         return processed
 
     def _apply_basic_dither(self, audio: np.ndarray, target_bits: int) -> np.ndarray:
         """Fallback TPDF (Triangular PDF) dithering when Goodhertz unavailable."""
-        # Calculate quantization step
         q_step = 2.0 / (2**target_bits)
-
-        # Generate TPDF dither noise
         dither = np.random.triangular(-q_step, 0, q_step, size=audio.shape)
-
-        # Add dither and quantize
         dithered = audio + dither
         quantized = np.round(dithered / q_step) * q_step
-
         return np.clip(quantized, -1.0, 1.0)

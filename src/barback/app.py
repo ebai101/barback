@@ -8,7 +8,6 @@ from textual.binding import Binding
 from textual.containers import Container
 from textual.widgets import Footer, Header, Input, ProgressBar, Rule, Static
 
-from barback.audio_file import AudioFile
 from barback.audio_processor import AudioProcessor
 from barback.state import BarbackState
 from barback.util.messages import (
@@ -19,6 +18,7 @@ from barback.util.messages import (
 )
 from barback.validation import summarize_issues
 from barback.widgets.audio_table import AudioTable
+from barback.workers.audio_fixer import fix_all_files, fix_selected_file
 from barback.workers.file_processor import init_audio_data
 from barback.workers.file_watcher import watch_files
 
@@ -481,12 +481,7 @@ class Barback(App):
             self.info("Selected file has no SR/BD issues")
             return
 
-        try:
-            self.audio_processor.fix_samplerate_and_bitdepth(file_path)
-            self.info(f"Fixed {file_path.name}")
-
-        except Exception as e:
-            self.info(f"Error fixing file: {e}")
+        fix_selected_file(self, self.state, self.audio_processor, file_path)
 
     def action_fix_all_issues(self) -> None:
         """Fix all files with SR/BD issues (in-place)."""
@@ -496,14 +491,4 @@ class Barback(App):
             self.info("No SR/BD issues found")
             return
 
-        self.info(f"Fixing {len(sr_bd_files)} files...")
-
-        fixed_count = 0
-        for file_path in sr_bd_files:
-            try:
-                self.audio_processor.fix_samplerate_and_bitdepth(file_path)
-                fixed_count += 1
-            except Exception as e:
-                self.info(f"Failed to fix {file_path.name}: {e}")
-
-        self.info(f"Fixed {fixed_count}/{len(sr_bd_files)} files")
+        fix_all_files(self, self.state, self.audio_processor, sr_bd_files)

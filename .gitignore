@@ -2,6 +2,7 @@
 __pycache__
 *.wav
 testpack/
+/testpack.zip
 .vscode/
 **/.mypy_cache
 **/.pytest_cache
@@ -9,3 +10,4 @@ testpack/
 .python-version
 uv.lock
 .coverage*
+/repomix-output.txt

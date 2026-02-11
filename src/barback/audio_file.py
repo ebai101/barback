@@ -8,8 +8,8 @@ import numpy as np
 import soundfile as sf
 from numpy.typing import NDArray
 
-from barback.util.types import LoopResponse
 from barback.audio_processor import AudioProcessor
+from barback.util.types import LoopResponse
 
 
 @dataclass
