@@ -9,6 +9,7 @@ import soundfile as sf
 from numpy.typing import NDArray
 
 from barback.util.types import LoopResponse
+from barback.audio_processor import AudioProcessor
 
 
 @dataclass
@@ -210,3 +211,12 @@ class AudioFile:
             start, end = 0, len(audio_mono)
 
         return start, end
+
+    def fix_format(self, processor: "AudioProcessor") -> Path:
+        """
+        Automatically fix samplerate and bit depth issues.
+        Returns path to fixed file.
+        """
+        return processor.fix_samplerate_and_bitdepth(
+            self.filename, target_sr=44100, target_bits=24
+        )

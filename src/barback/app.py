@@ -8,6 +8,8 @@ from textual.binding import Binding
 from textual.containers import Container
 from textual.widgets import Footer, Header, Input, ProgressBar, Rule, Static
 
+from barback.audio_file import AudioFile
+from barback.audio_processor import AudioProcessor
 from barback.state import BarbackState
 from barback.util.messages import (
     BarbackLoaded,
@@ -32,6 +34,8 @@ class Barback(App):
         Binding("X", "open_all_issue_type_in_rx", "RX (All Issue Type)"),
         Binding("m", "open_in_myriad", "Myriad"),
         Binding("M", "open_all_issue_type_in_myriad", "Myriad (All Issue Type)"),
+        Binding("r", "fix_selected", "Fix"),
+        Binding("R", "fix_all_issues", "Fix All"),
         Binding("f", "reveal_in_finder", "Finder"),
         Binding("/", "enter_search_mode", "Search", show=False),
         Binding("escape", "exit_search_mode", "Exit Search", show=False, priority=True),
@@ -43,6 +47,7 @@ class Barback(App):
             audio_dir=Path(audio_dir),
             selected_dir=Path(audio_dir),
         )
+        self.audio_processor = AudioProcessor()
 
     def compose(self) -> Generator[Any, Any, None]:
         """Build the UI layout."""
@@ -365,7 +370,9 @@ class Barback(App):
 
         try:
             subprocess.Popen(
-                ["open", "-a", "iZotope RX 11 Audio Editor", str(file_path)]
+                ["open", "-a", "iZotope RX 11 Audio Editor", str(file_path)],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
             )
             self.info(f"Opening {file_path.name} in RX")
         except Exception as e:
@@ -397,8 +404,6 @@ class Barback(App):
         try:
             subprocess.Popen(
                 ["open", "-a", "iZotope RX 11 Audio Editor"] + [str(f) for f in files],
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
             )
         except Exception as e:
             self.info(f"Error opening RX: {e}")
@@ -459,3 +464,46 @@ class Barback(App):
             self.info(f"Revealing {file_path.name} in Finder")
         except Exception as e:
             self.info(f"Error revealing in Finder: {e}")
+
+    # -------------------------------------------------------------------------
+    # Actions - Audio Processor
+    # -------------------------------------------------------------------------
+
+    def action_fix_selected(self) -> None:
+        """Fix SR/BD issues in the selected file (in-place)."""
+        file_path = self._get_selected_file_path()
+        if not file_path:
+            self.info("No file selected")
+            return
+
+        row = self.state.audio_data.get_row(file_path)
+        if not row or not any(i.kind == "SR/BD" for i in (row.issues or [])):
+            self.info("Selected file has no SR/BD issues")
+            return
+
+        try:
+            self.audio_processor.fix_samplerate_and_bitdepth(file_path)
+            self.info(f"Fixed {file_path.name}")
+
+        except Exception as e:
+            self.info(f"Error fixing file: {e}")
+
+    def action_fix_all_issues(self) -> None:
+        """Fix all files with SR/BD issues (in-place)."""
+        sr_bd_files = self._get_files_with_issue_kind("SR/BD")
+
+        if not sr_bd_files:
+            self.info("No SR/BD issues found")
+            return
+
+        self.info(f"Fixing {len(sr_bd_files)} files...")
+
+        fixed_count = 0
+        for file_path in sr_bd_files:
+            try:
+                self.audio_processor.fix_samplerate_and_bitdepth(file_path)
+                fixed_count += 1
+            except Exception as e:
+                self.info(f"Failed to fix {file_path.name}: {e}")
+
+        self.info(f"Fixed {fixed_count}/{len(sr_bd_files)} files")

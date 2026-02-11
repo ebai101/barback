@@ -4,7 +4,12 @@ version = "0.1.0"
 description = "Audio validator for Splice"
 readme = "README.md"
 requires-python = ">=3.12, <3.13"
-dependencies = ["librosa>=0.11.0", "textual>=0.85.1", "watchfiles>=0.24.0"]
+dependencies = [
+  "librosa>=0.11.0",
+  "pedalboard>=0.9.22",
+  "textual>=0.85.1",
+  "watchfiles>=0.24.0",
+]
 
 [build-system]
 requires = ["hatchling"]
@@ -12,8 +17,3 @@ build-backend = "hatchling.build"
 
 [project.scripts]
 barback = "barback:main"
-
-[tool.basedpyright]
-include = ["src"]
-reportMissingImports = "error"
-reportMissingTypeStubs = false
