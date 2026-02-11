@@ -49,7 +49,9 @@ class Barback(App):
         yield Header()
         yield Container(
             InfoBox(id="info"),
-            Static(),  # Spacer
+            Static(),
+            Static(id="stats"),
+            Static(),
             ProgressBar(total=100, id="progress"),
             id="head",
         )
@@ -73,6 +75,11 @@ class Barback(App):
         """Update the info box with status messages."""
         info_box = self.query_one("#info", InfoBox)
         info_box.update(text)
+
+    def update_stats(self, text: str) -> None:
+        """Update the stats line with file counts."""
+        stats_box = self.query_one("#stats", Static)
+        stats_box.update(text)
 
     # -------------------------------------------------------------------------
     # Message Handlers
@@ -178,19 +185,14 @@ class Barback(App):
             new_cursor_row = min(old_cursor_row, table.row_count - 1)
             table.move_cursor(row=new_cursor_row)
 
-        # Update info with stats
+        # Update stats line (separate from info messages)
         total_files = len(self.state.audio_data)
         files_with_issues = sum(1 for row in self.state.audio_data if row.issues)
 
         if self.state.loaded:
-            if self.state.show_all_files:
-                self.info(
-                    f"{total_files} files scanned, {files_with_issues} with issues"
-                )
-            else:
-                self.info(
-                    f"{total_files} files scanned, {files_with_issues} with issues"
-                )
+            self.update_stats(
+                f"{total_files} files scanned, {files_with_issues} with issues"
+            )
 
     def _get_selected_file_path(self) -> Path | None:
         """Get the file path of the currently selected row."""
