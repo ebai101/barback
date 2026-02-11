@@ -124,6 +124,9 @@ class Barback(App):
         """
         table = self.query_one("#table", AudioTable)
 
+        # Save current cursor position before clearing
+        old_cursor_row = table.cursor_row if table.row_count > 0 else 0
+
         # Clear existing rows
         table.clear()
 
@@ -169,12 +172,25 @@ class Barback(App):
                 key=str(row.file.filename),  # Use full path as key for updates
             )
 
+        # Restore cursor position, adjusting if needed
+        if table.row_count > 0:
+            # If the old position is beyond the new row count, move to the last row
+            new_cursor_row = min(old_cursor_row, table.row_count - 1)
+            table.move_cursor(row=new_cursor_row)
+
         # Update info with stats
         total_files = len(self.state.audio_data)
-        files_with_issues = len(rows_to_display)
+        files_with_issues = sum(1 for row in self.state.audio_data if row.issues)
 
         if self.state.loaded:
-            self.info(f"{total_files} files scanned, {files_with_issues} with issues")
+            if self.state.show_all_files:
+                self.info(
+                    f"{total_files} files scanned, {files_with_issues} with issues"
+                )
+            else:
+                self.info(
+                    f"{total_files} files scanned, {files_with_issues} with issues"
+                )
 
     def _get_selected_file_path(self) -> Path | None:
         """Get the file path of the currently selected row."""

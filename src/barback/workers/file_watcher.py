@@ -50,9 +50,6 @@ async def watch_files(app: BarbackProtocol, state: BarbackState) -> None:
                 if change_type == Change.added:
                     await _handle_file_added(app, state, executor, path)
 
-                elif change_type == Change.modified:
-                    await _handle_file_modified(app, state, executor, path)
-
                 elif change_type == Change.deleted:
                     await _handle_file_deleted(app, state, path)
 
@@ -96,57 +93,6 @@ async def _handle_file_added(
         app.info(f"Error processing {path.name}: {e}")
 
 
-async def _handle_file_modified(
-    app: BarbackProtocol,
-    state: BarbackState,
-    executor: ThreadPoolExecutor,
-    path: Path,
-) -> None:
-    """Reprocess a modified file."""
-    app.info(f"File modified: {path.name}")
-
-    loop = asyncio.get_event_loop()
-    try:
-        row = await loop.run_in_executor(
-            executor,
-            process_file_with_validation,
-            path,
-        )
-
-        if row is None:
-            raise AudioFileError("failed to process audio file")
-
-        # Update existing row or add if somehow missing
-        if path in state.audio_data:
-            # Update by replacing
-            state.audio_data.update_row(
-                path,
-                duration=row.duration,
-                sample_rate=row.sample_rate,
-                bit_depth=row.bit_depth,
-                loop=row.loop,
-                bpm=row.bpm,
-                bars=row.bars,
-                zc=row.zc,
-                issues=row.issues,
-            )
-        else:
-            # File wasn't in table, add it
-            state.audio_data.add_row(row)
-
-        app.post_message(TableUpdate("file_modified"))
-
-        # User feedback
-        if row.issues:
-            issue_count = len(row.issues)
-            app.info(f"Updated {path.name} ({issue_count} issues)")
-        else:
-            app.info(f"Updated {path.name} (no issues)")
-
-    except Exception as e:
-        app.info(f"Error reprocessing {path.name}: {e}")
-
-
 async def _handle_file_deleted(
     app: BarbackProtocol,
     state: BarbackState,
@@ -154,8 +100,8 @@ async def _handle_file_deleted(
 ) -> None:
     """Remove a deleted file from the table."""
     if path in state.audio_data:
-        app.info(f"File deleted: {path.name}")
         state.audio_data.delete_row(path)
         app.post_message(TableUpdate("file_deleted"))
+        app.info(f"File deleted: {path.name}")
     else:
         app.info(f"File deleted but not in table: {path.name}")
