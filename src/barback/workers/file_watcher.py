@@ -118,12 +118,6 @@ async def _handle_file_modified(
 
         # Update existing row or add if somehow missing
         if path in state.audio_data:
-            # Remove old, add new (simpler than partial updates)
-            old_row = state.audio_data.get_row(path)
-            if old_row:
-                # Could compare hashes here if you add that field later
-                pass
-
             # Update by replacing
             state.audio_data.update_row(
                 path,

@@ -20,12 +20,5 @@ class TableUpdate(Message):
     update_from: str
 
 
-@dataclass
-class FileChanged(Message):
-    path: Path
-    change_type: str = "modified"
-    old_path: Path | None = None
-
-
 class BarbackLoaded(Message):
     pass

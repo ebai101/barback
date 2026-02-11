@@ -12,7 +12,6 @@ class FileTree(DirectoryTree):
     ]
 
     def __init__(self, path: str | Path, id: str = ""):
-        self.selected_dir = path
         super().__init__(path, id=id)
 
     def filter_paths(self, paths: Iterable[Path]) -> Iterable[Path]:

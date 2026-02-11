@@ -1,13 +1,10 @@
 from collections.abc import Iterator
 from dataclasses import dataclass, fields
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any
 
 from barback.audio_file import AudioFile
 from barback.util.types import Issue
-
-# Type definitions
-SortDirection = Literal["asc", "desc"]
 
 
 @dataclass
