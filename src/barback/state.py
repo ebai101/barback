@@ -11,3 +11,5 @@ class BarbackState:
     audio_data: AudioData = AudioData()
     loaded: bool = False
     show_all_files: bool = False
+    search_mode: bool = False
+    search_query: str = ""

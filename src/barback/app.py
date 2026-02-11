@@ -1,4 +1,5 @@
 import subprocess
+
 from collections.abc import Generator
 from pathlib import Path
 from typing import Any
@@ -6,7 +7,7 @@ from typing import Any
 from textual.app import App
 from textual.binding import Binding
 from textual.containers import Container
-from textual.widgets import Footer, Header, ProgressBar, Rule, Static
+from textual.widgets import Footer, Header, Input, ProgressBar, Rule, Static
 
 from barback.state import BarbackState
 from barback.util.messages import (
@@ -34,6 +35,8 @@ class Barback(App):
         Binding("m", "open_in_myriad", "Myriad"),
         Binding("M", "open_all_issue_type_in_myriad", "Myriad (All Issue Type)"),
         Binding("f", "reveal_in_finder", "Finder"),
+        Binding("/", "enter_search_mode", "Search", show=False),
+        Binding("escape", "exit_search_mode", "Exit Search", show=False, priority=True),
     ]
 
     def __init__(self, audio_dir: str) -> None:
@@ -59,6 +62,7 @@ class Barback(App):
             AudioTable(id="table"),
             id="body",
         )
+        yield Input(id="search", classes="hidden")
         yield Footer()
 
     def on_mount(self) -> None:
@@ -116,6 +120,19 @@ class Barback(App):
         table = event.data_table
         table.sort(event.column_key)
 
+    def on_input_changed(self, event: Input.Changed) -> None:
+        """Handle search input changes."""
+        if event.input.id == "search":
+            self.state.search_query = event.value.lower()
+            self._refresh_table()
+
+    def on_input_submitted(self, event: Input.Submitted) -> None:
+        """Handle Enter key in search - return focus to table."""
+        if event.input.id == "search":
+            table = self.query_one("#table", AudioTable)
+            table.focus()
+            self.info(f"Search: {self.state.search_query or '(empty)'}")
+
     # -------------------------------------------------------------------------
     # Table Management
     # -------------------------------------------------------------------------
@@ -155,6 +172,14 @@ class Barback(App):
         else:
             rows_to_display = [row for row in filtered_data if row.issues]
 
+        # Apply search filter if in search mode
+        if self.state.search_mode and self.state.search_query:
+            rows_to_display = [
+                row
+                for row in rows_to_display
+                if self.state.search_query in row.file.filename.name.lower()
+            ]
+
         # Populate table
         for row in rows_to_display:
             # Format issue summary
@@ -163,9 +188,16 @@ class Barback(App):
             else:
                 issue_summary = "—"
 
+            # Highlight search query in filename if searching
+            filename_display = row.file.filename.name
+            if self.state.search_mode and self.state.search_query:
+                filename_display = self._highlight_search(
+                    filename_display, self.state.search_query
+                )
+
             # Add row to table
             table.add_row(
-                row.file.filename.name,
+                filename_display,
                 f"{row.duration:.2f}s" if row.duration else "—",
                 str(int(row.sample_rate)) if row.sample_rate else "—",
                 row.bit_depth or "—",
@@ -188,9 +220,34 @@ class Barback(App):
         files_with_issues = sum(1 for row in self.state.audio_data if row.issues)
 
         if self.state.loaded:
-            self.update_stats(
-                f"{total_files} files scanned, {files_with_issues} with issues"
-            )
+            if self.state.search_mode:
+                self.update_stats(
+                    f"{len(rows_to_display)} matching files "
+                    f"(of {total_files} total, {files_with_issues} with issues)"
+                )
+            else:
+                self.update_stats(
+                    f"{total_files} files scanned, {files_with_issues} with issues"
+                )
+
+    def _highlight_search(self, text: str, query: str) -> str:
+        """Highlight search query in text using Rich markup."""
+        if not query:
+            return text
+
+        # Case-insensitive search but preserve original case
+        lower_text = text.lower()
+        start_idx = lower_text.find(query)
+
+        if start_idx == -1:
+            return text
+
+        # Build highlighted string
+        before = text[:start_idx]
+        match = text[start_idx : start_idx + len(query)]
+        after = text[start_idx + len(query) :]
+
+        return f"{before}[bold yellow on blue]{match}[/]{after}"
 
     def _get_selected_file_path(self) -> Path | None:
         """Get the file path of the currently selected row."""
@@ -201,7 +258,13 @@ class Barback(App):
 
         try:
             # Get the filename from the first column of the current row
-            filename = table.get_cell_at((table.cursor_row, 0))
+            filename_display = table.get_cell_at((table.cursor_row, 0))
+
+            # Strip Rich markup if present (from search highlighting)
+            # Extract just the filename by removing markup tags
+            import re
+
+            filename = re.sub(r"\[.*?\]", "", filename_display)
 
             # Search through audio_data to find the matching file by name
             for row in self.state.audio_data:
@@ -241,11 +304,15 @@ class Barback(App):
 
     def action_cursor_down(self) -> None:
         """Move cursor down in table."""
+        if self.state.search_mode:
+            return  # Don't move cursor while typing
         table = self.query_one("#table", AudioTable)
         table.action_cursor_down()
 
     def action_cursor_up(self) -> None:
         """Move cursor up in table."""
+        if self.state.search_mode:
+            return  # Don't move cursor while typing
         table = self.query_one("#table", AudioTable)
         table.action_cursor_up()
 
@@ -258,6 +325,34 @@ class Barback(App):
             self.info("Showing all files")
         else:
             self.info("Showing only files with issues")
+
+    def action_enter_search_mode(self) -> None:
+        """Enter search mode."""
+        self.state.search_mode = True
+        self.state.search_query = ""
+
+        # Show and focus the search input
+        search_input = self.query_one("#search", Input)
+        search_input.value = ""
+        search_input.focus()
+
+        self.info("Search mode (ESC to exit)")
+
+    def action_exit_search_mode(self) -> None:
+        """Exit search mode and clear search."""
+        if not self.state.search_mode:
+            return
+
+        self.state.search_mode = False
+        self.state.search_query = ""
+
+        # Refocus the table
+        table = self.query_one("#table", AudioTable)
+        table.focus()
+
+        # Refresh to remove filtering and highlighting
+        self._refresh_table()
+        self.info("Search cleared")
 
     # -------------------------------------------------------------------------
     # Actions - Open in External Apps
@@ -318,7 +413,6 @@ class Barback(App):
             return
 
         try:
-            # Adjust app name as needed for your Myriad installation
             subprocess.Popen(
                 ["open", "-a", "Myriad", str(file_path)],
                 stdout=subprocess.DEVNULL,
