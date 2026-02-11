@@ -1,0 +1,175 @@
+from __future__ import annotations
+
+import os
+import re
+from typing import Iterable, List
+
+from barback.audio_file import AudioFile
+from barback.util.types import Issue
+
+
+def check_format_sr_bd(af: AudioFile) -> List[Issue]:
+    """44.1 kHz, 24‑bit, .wav only."""
+    issues: List[Issue] = []
+
+    ext = af.filename.suffix.lower()
+    if ext != ".wav":
+        issues.append(Issue("SR/BD", "not a wav file"))
+
+    if af.sample_rate != 44100:
+        issues.append(
+            Issue(
+                "SR/BD",
+                f"sample rate {af.sample_rate} is incorrect",
+            )
+        )
+
+    if af.bit_depth != "PCM_24":
+        issues.append(
+            Issue(
+                "SR/BD",
+                f"bit depth {af.bit_depth} is incorrect",
+            )
+        )
+
+    return issues
+
+
+def check_silence(af: AudioFile) -> List[Issue]:
+    """Silence at start/end, with tighter restriction on non‑loops."""
+    issues: List[Issue] = []
+
+    start, end = af.get_start_end_silence()
+
+    name = str(af.filename)
+    is_loop_like = "loop" in name.lower()
+
+    # start
+    if not is_loop_like and start >= 500:
+        issues.append(
+            Issue("Silence", f"{start} samples at the start"),
+        )
+    elif start >= 22050:
+        issues.append(
+            Issue("Silence", f"{start} samples at the start"),
+        )
+
+    # end
+    if end >= 22050:
+        issues.append(
+            Issue("Silence", f"{end} samples at the end"),
+        )
+
+    return issues
+
+
+def check_zero_crossing(af: AudioFile) -> List[Issue]:
+    """Clicks/pops at start/end."""
+    issues: List[Issue] = []
+
+    nonzeros = af.get_start_end_zero_crossing()
+    if not nonzeros:
+        return issues
+
+    # original finalizer had “return f'nonzero values at {nonzeros}'”
+    issues.append(
+        Issue("ZC", f"nonzero values at {nonzeros}"),
+    )
+    return issues
+
+
+def check_loop_basic(af: AudioFile) -> List[Issue]:
+    """
+    Loop validity based on BPM/bars/expected samples.
+
+    Uses AudioFile.is_loop(), which already:
+    - extracts BPM from filename (regex),
+    - computes bar length in samples,
+    - compares actual vs expected sample count,
+    - returns (is_loop, message, bpm, num_bars).
+    """
+    issues: List[Issue] = []
+
+    # If filename does not suggest loop, skip this check
+    if "loop" not in str(af.filename).lower():
+        return issues
+
+    resp = af.is_loop()
+    if resp.is_loop:
+        return issues
+
+    # Non‑loop case: reclassify common messages into structured issues
+    msg = resp.response
+
+    if "bpm out of range" in msg:
+        issues.append(Issue("Loop", "does not loop (bpm out of range)"))
+    elif "no bpm found" in msg:
+        issues.append(Issue("Loop", "does not loop (no bpm found)"))
+    elif "off by" in msg:
+        # msg already contains difference text from AudioFile.is_loop()
+        issues.append(Issue("Loop", f"does not loop ({msg})"))
+    else:
+        # fallback
+        issues.append(Issue("Loop", f"does not loop ({msg})"))
+
+    return issues
+
+
+_KEY_SIG_REGEX = re.compile(r"_[A-G][b#]?(maj|min)?")
+_KEY_SIG_AT_END_REGEX = re.compile(r"^.*_[A-G](?:#|b)?(?:maj|min)?(?:\.wav)?$")
+
+
+def check_tonal_loop_key_signature(af: AudioFile) -> List[Issue]:
+    """Tonal loops should have a key signature at the end of the filename."""
+    issues: List[Issue] = []
+
+    basename = os.path.basename(str(af.filename))
+    lowercase_name = basename.lower()
+
+    # First: multiple key signatures anywhere
+    key_sig_matches = _KEY_SIG_REGEX.findall(basename)
+    if len(key_sig_matches) > 1:
+        issues.append(Issue("Key sig", "multiple key signatures"))
+        # Still continue; filename format may also be wrong.
+
+    # Only enforce for loops that are not clearly drums/percussion
+    if "loop" not in lowercase_name:
+        return issues
+
+    if not any(s in lowercase_name for s in ("drum", "perc", "hihat")):
+        if not _KEY_SIG_AT_END_REGEX.match(basename):
+            issues.append(
+                Issue(
+                    "Key sig",
+                    "does not have a key signature but is a tonal loop",
+                )
+            )
+
+    return issues
+
+
+def validate_audio_file(af: AudioFile) -> list[Issue]:
+    """
+    Run all validation checks on a single AudioFile.
+
+    Caller is responsible for:
+    - constructing AudioFile,
+    - calling af.load(mono=True/False) before this,
+    - calling af.unload() afterwards.
+    """
+    issues: list[Issue] = []
+    issues.extend(check_format_sr_bd(af))
+    issues.extend(check_silence(af))
+    issues.extend(check_zero_crossing(af))
+    issues.extend(check_loop_basic(af))
+    issues.extend(check_tonal_loop_key_signature(af))
+    return issues
+
+
+def summarize_issues(issues: Iterable[Issue]) -> str:
+    """
+    Convert a list of FinalizerIssues into a single short string,
+    suitable for a table column.
+    """
+    msgs = [i.message for i in issues]
+    return "; ".join(msgs)

@@ -1,13 +1,13 @@
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal, Optional
+from typing import Literal
 
-FinalizerIssueKind = Literal["SR/BD", "Silence", "ZC", "Loop", "Key sig"]
+IssueType = Literal["SR/BD", "Silence", "ZC", "Loop", "Key sig"]
 
 
 @dataclass
-class FinalizerIssue:
-    kind: FinalizerIssueKind
+class Issue:
+    kind: IssueType
     message: str
 
 
@@ -16,5 +16,5 @@ class LoopResponse:
     filename: Path
     is_loop: bool
     response: str
-    bpm: Optional[int] = None
-    num_bars: Optional[int] = None
+    bpm: int | None = None
+    num_bars: int | None = None

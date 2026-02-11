@@ -1,6 +1,5 @@
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
 
 from textual.message import Message
 
@@ -25,7 +24,7 @@ class TableUpdate(Message):
 class FileChanged(Message):
     path: Path
     change_type: str = "modified"
-    old_path: Optional[Path] = None
+    old_path: Path | None = None
 
 
 class BarbackLoaded(Message):

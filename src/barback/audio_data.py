@@ -1,9 +1,10 @@
+from collections.abc import Iterator
 from dataclasses import dataclass, fields
 from pathlib import Path
-from typing import Any, Iterator, Literal, Optional, Union
+from typing import Any, Literal
 
 from barback.audio_file import AudioFile
-from barback.util.types import FinalizerIssue
+from barback.util.types import Issue
 
 # Type definitions
 SortDirection = Literal["asc", "desc"]
@@ -12,14 +13,14 @@ SortDirection = Literal["asc", "desc"]
 @dataclass
 class AudioDataRow:
     file: AudioFile
-    duration: Optional[float] = None
-    sample_rate: Optional[float] = None
-    bit_depth: Optional[str] = None
-    loop: Optional[str] = None
-    bpm: Optional[int] = None
-    bars: Optional[int] = None
-    zc: Optional[str] = None
-    finalizer_issues: Optional[list[FinalizerIssue]] = None
+    duration: float | None = None
+    sample_rate: float | None = None
+    bit_depth: str | None = None
+    loop: str | None = None
+    bpm: int | None = None
+    bars: int | None = None
+    zc: str | None = None
+    issues: list[Issue] | None = None
 
 
 class AudioData:
@@ -30,7 +31,7 @@ class AudioData:
         """Add a new row to the table."""
         self._data[str(row.file.filename)] = row
 
-    def get_row(self, file: Union[str, Path, AudioFile]) -> Optional[AudioDataRow]:
+    def get_row(self, file: str | Path | AudioFile) -> AudioDataRow | None:
         """Get a row by file path."""
         if isinstance(file, AudioFile):
             path = str(file.filename)
@@ -42,7 +43,7 @@ class AudioData:
         """Gets all the AudioFiles in the table."""
         return self.get_col("file")
 
-    def get_col(self, column: str) -> list[Any]:
+    def get_col(self, column: str):
         """Get values from the specified column for all rows."""
         valid_fields = {f.name for f in fields(AudioDataRow)}
         if column not in valid_fields:
@@ -52,7 +53,7 @@ class AudioData:
 
         return [getattr(row, column) for row in self._data.values()]
 
-    def update_row(self, file: Union[str, Path, AudioFile], **kwargs: Any) -> bool:
+    def update_row(self, file: str | Path | AudioFile, **kwargs: Any | None) -> bool:
         """
         Update an existing row with new values.
         Returns True if the row was found and updated, False otherwise.
@@ -71,7 +72,7 @@ class AudioData:
             return True
         return False
 
-    def filter_by_dir(self, directory: Union[str, Path]) -> "AudioData":
+    def filter_by_dir(self, directory: str | Path) -> "AudioData":
         """Return a new table containing only rows where the file is in the specified directory."""
         new_table = AudioData()
 
@@ -81,6 +82,21 @@ class AudioData:
 
         return new_table
 
+    def delete_row(self, file: str | Path | AudioFile) -> bool:
+        """
+        Remove a row from the table.
+        Returns True if the row was found and deleted, False otherwise.
+        """
+        if isinstance(file, AudioFile):
+            key = str(file.filename)
+        else:
+            key = str(file)
+
+        if key in self._data:
+            del self._data[key]
+            return True
+        return False
+
     def __len__(self) -> int:
         """Return the number of rows in the table."""
         return len(self._data)
@@ -89,7 +105,7 @@ class AudioData:
         """Iterate over all rows in the table."""
         return iter(self._data.values())
 
-    def __contains__(self, file: Union[str, Path, AudioFile]) -> bool:
+    def __contains__(self, file: str | Path | AudioFile) -> bool:
         """Check if a file exists in the table."""
         if isinstance(file, AudioFile):
             file = str(file.filename)

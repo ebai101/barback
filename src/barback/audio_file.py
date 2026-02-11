@@ -17,10 +17,9 @@ class AudioFileError(Exception):
 
 
 class AudioFile:
-
     def __init__(self, filename: Path):
-        self.filename = Path(filename)
-        self.loaded = False
+        self.filename: Path = Path(filename)
+        self.loaded: bool = False
 
     @property
     def duration(self) -> float:
@@ -28,7 +27,7 @@ class AudioFile:
 
     @property
     def sample_rate(self) -> float:
-        return librosa.get_samplerate(self.filename)
+        return librosa.get_samplerate(str(self.filename))
 
     @property
     def bit_depth(self) -> str:
@@ -192,26 +191,6 @@ class AudioFile:
             return "end"
         else:
             return ""
-
-    # def extend(self, infer=False):
-    #     bar_len_samples = round(self.sample_rate * ((60 / self.bpm) * 4.0))
-    #     print(f"Bar length: {bar_len_samples}")
-    #     print(f"First onset location: {self.first_onset}")
-    #     if bar_len_samples < self.first_onset:
-    #         new_bar_len = bar_len_samples
-    #         while new_bar_len < self.first_onset:
-    #             new_bar_len += bar_len_samples
-    #         bar_len_samples = new_bar_len
-
-    #     pad_len = bar_len_samples - self.first_onset
-    #     print(f"Padding audio with {pad_len} samples")
-    #     new_audio = np.ndarray(
-    #         shape=(self.audio.shape[0], self.audio.shape[1] + pad_len), dtype=float
-    #     )
-    #     for i in range(new_audio.shape[0]):
-    #         new_audio[i] = np.pad(self.audio[i], (pad_len, 0), "constant")
-    #     self.audio = new_audio
-    #     self.save()
 
     def get_start_end_silence(self) -> tuple[float, float]:
         if not self.loaded:

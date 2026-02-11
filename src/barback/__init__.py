@@ -1,14 +1,28 @@
 import sys
+from pathlib import Path
 
 from barback.app import Barback
 
 
 def main() -> None:
     if len(sys.argv) != 2:
-        print("Must supply an audio directory")
+        print("Usage: barback <audio_directory>")
         sys.exit(1)
+
     audio_dir = sys.argv[1]
-    app = Barback(audio_dir)
+    audio_path = Path(audio_dir)
+
+    # Validate directory exists
+    if not audio_path.exists():
+        print(f"Error: Directory '{audio_dir}' does not exist")
+        sys.exit(1)
+
+    if not audio_path.is_dir():
+        print(f"Error: '{audio_dir}' is not a directory")
+        sys.exit(1)
+
+    # Run the app
+    app = Barback(str(audio_path.resolve()))
     app.run()
 
 
