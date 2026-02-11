@@ -1,3 +1,4 @@
+import subprocess
 from collections.abc import Generator
 from pathlib import Path
 from typing import Any
@@ -29,6 +30,11 @@ class Barback(App):
         Binding("j", "cursor_down", "Down", show=False),
         Binding("k", "cursor_up", "Up", show=False),
         Binding("a", "toggle_show_all", "Toggle All/Issues"),
+        Binding("x", "open_in_rx", "RX"),
+        Binding("X", "open_all_issue_type_in_rx", "RX (All Issue Type)"),
+        Binding("m", "open_in_myriad", "Myriad"),
+        Binding("M", "open_all_issue_type_in_myriad", "Myriad (All Issue Type)"),
+        Binding("f", "reveal_in_finder", "Finder"),
     ]
 
     def __init__(self, audio_dir: str) -> None:
@@ -170,8 +176,51 @@ class Barback(App):
         if self.state.loaded:
             self.info(f"{total_files} files scanned, {files_with_issues} with issues")
 
+    def _get_selected_file_path(self) -> Path | None:
+        """Get the file path of the currently selected row."""
+        table = self.query_one("#table", AudioTable)
+
+        if table.row_count == 0:
+            return None
+
+        try:
+            # Get the filename from the first column of the current row
+            filename = table.get_cell_at((table.cursor_row, 0))
+
+            # Search through audio_data to find the matching file by name
+            for row in self.state.audio_data:
+                if row.file.filename.name == filename:
+                    return row.file.filename  # This is the full Path object
+
+        except Exception as e:
+            self.info(f"Error getting file path: {e}")
+
+        return None
+
+    def _get_current_issue_kind(self) -> str | None:
+        """Get the issue kind from the currently selected row."""
+        file_path = self._get_selected_file_path()
+        if not file_path:
+            return None
+
+        row = self.state.audio_data.get_row(file_path)
+        if row and row.issues:
+            # Return the kind of the first issue
+            return row.issues[0].kind
+
+        return None
+
+    def _get_files_with_issue_kind(self, issue_kind: str) -> list[Path]:
+        """Get all files that have issues of the specified kind."""
+        files = []
+        for row in self.state.audio_data:
+            if row.issues:
+                if any(issue.kind == issue_kind for issue in row.issues):
+                    files.append(row.file.filename)
+        return files
+
     # -------------------------------------------------------------------------
-    # Actions (stubs for future features)
+    # Actions - Basic Navigation
     # -------------------------------------------------------------------------
 
     def action_cursor_down(self) -> None:
@@ -193,3 +242,112 @@ class Barback(App):
             self.info("Showing all files")
         else:
             self.info("Showing only files with issues")
+
+    # -------------------------------------------------------------------------
+    # Actions - Open in External Apps
+    # -------------------------------------------------------------------------
+
+    def action_open_in_rx(self) -> None:
+        """Open the selected file in iZotope RX."""
+        file_path = self._get_selected_file_path()
+        if not file_path:
+            self.info("No file selected")
+            return
+
+        try:
+            subprocess.Popen(
+                ["open", "-a", "iZotope RX 11 Audio Editor", str(file_path)]
+            )
+            self.info(f"Opening {file_path.name} in RX")
+        except Exception as e:
+            self.info(f"Error opening RX: {e}")
+
+    def action_open_all_issue_type_in_rx(self) -> None:
+        """Open all files with the same issue type in iZotope RX."""
+        issue_kind = self._get_current_issue_kind()
+        if not issue_kind:
+            self.info("No issue selected")
+            return
+
+        files = self._get_files_with_issue_kind(issue_kind)
+        if not files:
+            self.info(f"No files with {issue_kind} issues")
+            return
+
+        # Limit to 32 files to avoid overwhelming the system
+        MAX_FILES = 32
+        if len(files) > MAX_FILES:
+            files = files[:MAX_FILES]
+            self.info(
+                f"Opening first {MAX_FILES} {issue_kind} issues in RX "
+                f"({len(self._get_files_with_issue_kind(issue_kind))} total)"
+            )
+        else:
+            self.info(f"Opening {len(files)} {issue_kind} issues in RX")
+
+        try:
+            subprocess.Popen(
+                ["open", "-a", "iZotope RX 11 Audio Editor"] + [str(f) for f in files],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+        except Exception as e:
+            self.info(f"Error opening RX: {e}")
+
+    def action_open_in_myriad(self) -> None:
+        """Open the selected file in Myriad."""
+        file_path = self._get_selected_file_path()
+        if not file_path:
+            self.info("No file selected")
+            return
+
+        try:
+            # Adjust app name as needed for your Myriad installation
+            subprocess.Popen(
+                ["open", "-a", "Myriad", str(file_path)],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            self.info(f"Opening {file_path.name} in Myriad")
+        except Exception as e:
+            self.info(f"Error opening Myriad: {e}")
+
+    def action_open_all_issue_type_in_myriad(self) -> None:
+        """Open all files with the same issue type in Myriad."""
+        issue_kind = self._get_current_issue_kind()
+        if not issue_kind:
+            self.info("No issue selected")
+            return
+
+        files = self._get_files_with_issue_kind(issue_kind)
+        if not files:
+            self.info(f"No files with {issue_kind} issues")
+            return
+
+        self.info(f"Opening {len(files)} {issue_kind} issues in Myriad")
+
+        try:
+            subprocess.Popen(
+                ["open", "-a", "Myriad"] + [str(f) for f in files],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+        except Exception as e:
+            self.info(f"Error opening Myriad: {e}")
+
+    def action_reveal_in_finder(self) -> None:
+        """Reveal the selected file in Finder."""
+        file_path = self._get_selected_file_path()
+        if not file_path:
+            self.info("No file selected")
+            return
+
+        try:
+            subprocess.Popen(
+                ["open", "-R", str(file_path)],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            self.info(f"Revealing {file_path.name} in Finder")
+        except Exception as e:
+            self.info(f"Error revealing in Finder: {e}")

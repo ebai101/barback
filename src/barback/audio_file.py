@@ -168,7 +168,7 @@ class AudioFile:
             return LoopResponse(
                 self.filename,
                 False,
-                f"no (off by {difference:.2f} samples)",
+                f"off by {difference:.2f} samples",
                 bpm,
                 num_bars_rounded,
             )

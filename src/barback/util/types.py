@@ -2,12 +2,12 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
-IssueType = Literal["SR/BD", "Silence", "ZC", "Loop", "Key sig"]
+IssueKind = Literal["SR/BD", "Silence", "ZC", "Loop", "Key sig"]
 
 
 @dataclass
 class Issue:
-    kind: IssueType
+    kind: IssueKind
     message: str
 
 
