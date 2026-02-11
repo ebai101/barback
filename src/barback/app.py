@@ -17,7 +17,6 @@ from barback.util.messages import (
 )
 from barback.validation import summarize_issues
 from barback.widgets.audio_table import AudioTable
-from barback.widgets.file_tree import FileTree
 from barback.widgets.info_box import InfoBox
 from barback.workers.file_watcher import watch_files
 from barback.workers.init_audio_data import init_audio_data
@@ -58,7 +57,6 @@ class Barback(App):
         yield Rule(line_style="ascii", id="rule")
         yield Container(
             AudioTable(id="table"),
-            FileTree(self.state.audio_dir, id="tree"),
             id="body",
         )
         yield Footer()
