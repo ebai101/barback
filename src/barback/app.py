@@ -298,7 +298,11 @@ class Barback(App):
         for row in self.state.audio_data:
             if row.issues:
                 if any(issue.kind == issue_kind for issue in row.issues):
-                    files.append(row.file.filename)
+                    if self.state.search_mode and self.state.search_query:
+                        if self.state.search_query in row.file.filename.name.lower():
+                            files.append(row.file.filename)
+                    else:
+                        files.append(row.file.filename)
         return files
 
     # -------------------------------------------------------------------------
