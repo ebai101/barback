@@ -10,7 +10,7 @@ from barback.audio_file import AudioFileError
 from barback.state import BarbackState
 from barback.util.messages import TableUpdate
 from barback.util.protocol import BarbackProtocol
-from barback.workers.init_audio_data import process_file_with_validation
+from barback.workers.file_processor import process_file_with_validation
 
 
 def is_temp_file(filename: str) -> bool:

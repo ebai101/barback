@@ -1,5 +1,4 @@
 import subprocess
-
 from collections.abc import Generator
 from pathlib import Path
 from typing import Any
@@ -19,8 +18,8 @@ from barback.util.messages import (
 from barback.validation import summarize_issues
 from barback.widgets.audio_table import AudioTable
 from barback.widgets.info_box import InfoBox
+from barback.workers.file_processor import init_audio_data
 from barback.workers.file_watcher import watch_files
-from barback.workers.init_audio_data import init_audio_data
 
 
 class Barback(App):
