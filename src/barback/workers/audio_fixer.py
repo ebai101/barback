@@ -1,4 +1,5 @@
 import asyncio
+import time
 from concurrent.futures import ThreadPoolExecutor
 from multiprocessing import cpu_count
 from pathlib import Path
@@ -7,6 +8,7 @@ from textual import work
 
 from barback.audio_processor import AudioProcessor
 from barback.state import BarbackState
+from barback.util.logger import get_logger
 from barback.util.messages import ProgressBarAdvance, ProgressBarUpdate
 from barback.util.protocol import BarbackProtocol
 
@@ -22,10 +24,28 @@ def _fix_srbd_single_file(
     Fix a single file's sample rate and bit depth.
     Returns (filepath, success, error_message).
     """
+    logger = get_logger()
+    start_time = time.time()
+
+    logger.info(
+        f"Starting SRBD fix for: {filepath.name}",
+        extra={"filepath": filepath, "operation": "fix_srbd"},
+    )
     try:
         processor.fix_srbd(filepath)
+        duration = time.time() - start_time
+        logger.info(
+            f"Successfully fixed SRBD for: {filepath.name} in {duration:.2f}s",
+            extra={"filepath": filepath, "operation": "fix_srbd", "duration": duration},
+        )
         return (filepath, True, "")
     except Exception as e:
+        duration = time.time() - start_time
+        logger.error(
+            f"Failed to fix SRBD for: {filepath.name} after {duration:.2f}s",
+            extra={"filepath": filepath, "operation": "fix_srbd", "duration": duration},
+            exc_info=True,
+        )
         return (filepath, False, str(e))
 
 
@@ -113,10 +133,28 @@ def _fix_zc_single_file(
     Apply microfades to a single file.
     Returns (filepath, success, error_message).
     """
+    logger = get_logger()
+    start_time = time.time()
+
+    logger.info(
+        f"Starting ZC fix for: {filepath.name}",
+        extra={"filepath": filepath, "operation": "fix_zc"},
+    )
     try:
         processor.apply_microfades(filepath, fadein_samples, fadeout_samples)
+        duration = time.time() - start_time
+        logger.info(
+            f"Successfully fixed ZC for: {filepath.name} in {duration:.2f}s",
+            extra={"filepath": filepath, "operation": "fix_zc", "duration": duration},
+        )
         return (filepath, True, "")
     except Exception as e:
+        duration = time.time() - start_time
+        logger.error(
+            f"Failed to fix ZC for: {filepath.name} after {duration:.2f}s",
+            extra={"filepath": filepath, "operation": "fix_zc", "duration": duration},
+            exc_info=True,
+        )
         return (filepath, False, str(e))
 
 

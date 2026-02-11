@@ -23,9 +23,11 @@ class AudioDataRow:
 class AudioData:
     def __init__(self) -> None:
         self._data: dict[str, AudioDataRow] = {}
+        self.logger = get_logger()
 
     def add_row(self, row: AudioDataRow) -> None:
         """Add a new row to the table."""
+        self.logger.debug(f"Adding row to AudioData: {row.file.filename.name}")
         self._data[str(row.file.filename)] = row
 
     def get_row(self, file: str | Path | AudioFile) -> AudioDataRow | None:
@@ -61,6 +63,9 @@ class AudioData:
             key = str(file)
 
         if key in self._data:
+            self.logger.debug(
+                f"Updating row in AudioData: {Path(key).name} - {kwargs.keys()}"
+            )
             row = self._data[key]
             valid_fields = {f.name for f in fields(AudioDataRow)}
             for attr, value in kwargs.items():
@@ -90,6 +95,7 @@ class AudioData:
             key = str(file)
 
         if key in self._data:
+            self.logger.debug(f"Deleting row from AudioData: {Path(key).name}")
             del self._data[key]
             return True
         return False

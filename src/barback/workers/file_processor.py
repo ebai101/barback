@@ -8,6 +8,7 @@ from textual import work
 from barback.audio_data import AudioDataRow
 from barback.audio_file import AudioFile
 from barback.state import BarbackState
+from barback.util.logger import get_logger
 from barback.util.messages import (
     BarbackLoaded,
     ProgressBarAdvance,
@@ -21,11 +22,14 @@ from barback.validation import validate_audio_file
 
 def get_valid_audio_files(dirname: Path) -> list[Path]:
     """Discover all .wav files recursively under dirname."""
+    logger = get_logger()
     if not dirname.is_dir():
+        logger.warning(f"Attempted to scan non-directory: {dirname}")
         return []
 
     # Restrict to .wav only for your 44.1/24-bit requirement
     files = [file.resolve() for file in dirname.rglob("*.wav") if file.is_file()]
+    logger.info(f"Discovered {len(files)} .wav files in {dirname}")
     return files
 
 
@@ -34,7 +38,10 @@ def process_file_with_validation(filepath: Path) -> AudioDataRow | None:
     Load, validate, and build an AudioDataRow for a single file.
     Returns None if file cannot be processed.
     """
+    logger = get_logger()
     try:
+        logger.debug(f"Processing file: {filepath.name}", extra={"filepath": filepath})
+
         af = AudioFile(filepath)
         af.load(mono=True)
         issues = validate_audio_file(af)
@@ -43,6 +50,16 @@ def process_file_with_validation(filepath: Path) -> AudioDataRow | None:
         sil_start, sil_end = af.get_start_end_silence()
         zc_status = af.get_start_end_zero_crossing()
         af.unload()
+
+        if issues:
+            logger.info(
+                f"Validated {filepath.name}: {len(issues)} issue(s) - {', '.join(i.kind for i in issues)}",
+                extra={"filepath": filepath, "issues": len(issues)},
+            )
+        else:
+            logger.debug(
+                f"Validated {filepath.name}: No issues", extra={"filepath": filepath}
+            )
 
         return AudioDataRow(
             file=af,
@@ -57,6 +74,11 @@ def process_file_with_validation(filepath: Path) -> AudioDataRow | None:
         )
     except Exception as e:
         # Return a row with error info
+        logger.error(
+            f"Failed to process file: {filepath.name}",
+            extra={"filepath": filepath},
+            exc_info=True,
+        )
         af = AudioFile(filepath)
         return AudioDataRow(
             file=af,
@@ -70,12 +92,15 @@ async def init_audio_data(app: BarbackProtocol, state: BarbackState) -> None:
     Initial scan: discover all .wav files, validate them, and populate AudioData.
     """
     # Create a local executor (not stored in state)
+    logger = get_logger()
     executor = ThreadPoolExecutor(max_workers=cpu_count())
 
     try:
+        logger.info(f"Starting initial audio directory scan: {state.audio_dir}")
         audio_files = get_valid_audio_files(state.audio_dir)
 
         if not audio_files:
+            logger.warning(f"No .wav files found in {state.audio_dir}")
             app.info("No .wav files found in directory")
             app.post_message(BarbackLoaded())
             return
@@ -102,6 +127,13 @@ async def init_audio_data(app: BarbackProtocol, state: BarbackState) -> None:
 
         # Count files with issues for user feedback
         files_with_issues = sum(1 for row in rows if row.issues)
+        logger.info(
+            f"Initial scan complete: {len(audio_files)} files indexed, {files_with_issues} with issues",
+            extra={
+                "total_files": len(audio_files),
+                "files_with_issues": files_with_issues,
+            },
+        )
 
         app.info(f"Indexed {len(audio_files)} files ({files_with_issues} with issues)")
         app.post_message(BarbackLoaded())

@@ -10,6 +10,7 @@ from textual.widgets import Footer, Header, Input, ProgressBar, Rule, Static
 
 from barback.audio_processor import AudioProcessor
 from barback.state import BarbackState
+from barback.util.logger import get_logger
 from barback.util.messages import (
     BarbackLoaded,
     ProgressBarAdvance,
@@ -55,6 +56,8 @@ class Barback(App):
             selected_dir=Path(audio_dir),
         )
         self.audio_processor = AudioProcessor()
+        self.logger = get_logger()
+        self.logger.info(f"Barback initialized with directory: {audio_dir}")
 
     def compose(self) -> Generator[Any, Any, None]:
         """Build the UI layout."""
@@ -87,6 +90,7 @@ class Barback(App):
         """Update the info box with status messages."""
         info_box = self.query_one("#info", Static)
         info_box.update(text)
+        self.logger.info(text)
 
     def update_stats(self, text: str) -> None:
         """Update the stats line with file counts."""
@@ -333,6 +337,7 @@ class Barback(App):
     def action_toggle_show_all(self) -> None:
         """Toggle between showing all files and only files with issues."""
         self.state.show_all_files = not self.state.show_all_files
+        self.logger.debug(f"Toggled show all files: {self.state.show_all_files}")
         self._refresh_table()
 
         if self.state.show_all_files:
@@ -342,6 +347,7 @@ class Barback(App):
 
     def action_enter_search_mode(self) -> None:
         """Enter search mode."""
+        self.logger.debug("Entered search mode")
         self.state.search_mode = True
         self.state.search_query = ""
 
@@ -354,6 +360,7 @@ class Barback(App):
 
     def action_exit_search_mode(self) -> None:
         """Exit search mode and clear search."""
+        self.logger.debug(f"Exited search mode (query was: '{self.state.searchquery}')")
         if not self.state.search_mode:
             return
 
@@ -380,6 +387,9 @@ class Barback(App):
             return
 
         try:
+            self.logger.info(
+                f"Opening file in RX: {file_path.name}", extra={"filepath": file_path}
+            )
             subprocess.Popen(
                 ["open", "-a", "iZotope RX 11 Audio Editor", str(file_path)],
                 stdout=subprocess.DEVNULL,
@@ -387,6 +397,11 @@ class Barback(App):
             )
             self.info(f"Opening {file_path.name} in RX")
         except Exception as e:
+            self.logger.error(
+                f"Failed to open file in RX: {file_path.name}",
+                extra={"filepath": file_path},
+                exc_info=True,
+            )
             self.info(f"Error opening RX: {e}")
 
     def action_open_all_issue_type_in_rx(self) -> None:
@@ -405,11 +420,22 @@ class Barback(App):
         MAX_FILES = 32
         if len(files) > MAX_FILES:
             files = files[:MAX_FILES]
+            self.logger.warning(
+                f"Opening {MAX_FILES}/{len(self._get_files_with_issue_kind(issue_kind))} files in RX (limit reached)",
+                extra={
+                    "issue_kind": issue_kind,
+                    "total_files": len(self._get_files_with_issue_kind(issue_kind)),
+                },
+            )
             self.info(
                 f"Opening first {MAX_FILES} {issue_kind} issues in RX "
                 f"({len(self._get_files_with_issue_kind(issue_kind))} total)"
             )
         else:
+            self.logger.info(
+                f"Opening {len(files)} {issue_kind} files in RX",
+                extra={"issue_kind": issue_kind, "file_count": len(files)},
+            )
             self.info(f"Opening {len(files)} {issue_kind} issues in RX")
 
         try:
@@ -427,6 +453,10 @@ class Barback(App):
             return
 
         try:
+            self.logger.info(
+                f"Opening file in Myriad: {file_path.name}",
+                extra={"filepath": file_path},
+            )
             subprocess.Popen(
                 ["open", "-a", "Myriad", str(file_path)],
                 stdout=subprocess.DEVNULL,
@@ -434,6 +464,11 @@ class Barback(App):
             )
             self.info(f"Opening {file_path.name} in Myriad")
         except Exception as e:
+            self.logger.error(
+                f"Failed to open file in Myriad: {file_path.name}",
+                extra={"filepath": file_path},
+                exc_info=True,
+            )
             self.info(f"Error opening Myriad: {e}")
 
     def action_open_all_issue_type_in_myriad(self) -> None:
@@ -448,6 +483,10 @@ class Barback(App):
             self.info(f"No files with {issue_kind} issues")
             return
 
+        self.logger.info(
+            f"Opening {len(files)} {issue_kind} files in Myriad",
+            extra={"issue_kind": issue_kind, "file_count": len(files)},
+        )
         self.info(f"Opening {len(files)} {issue_kind} issues in Myriad")
 
         try:
@@ -467,6 +506,10 @@ class Barback(App):
             return
 
         try:
+            self.logger.info(
+                f"Revealing file in Finder: {file_path.name}",
+                extra={"filepath": file_path},
+            )
             subprocess.Popen(
                 ["open", "-R", str(file_path)],
                 stdout=subprocess.DEVNULL,
@@ -474,6 +517,11 @@ class Barback(App):
             )
             self.info(f"Revealing {file_path.name} in Finder")
         except Exception as e:
+            self.logger.error(
+                f"Failed to reveal file in Finder: {file_path.name}",
+                extra={"filepath": file_path},
+                exc_info=True,
+            )
             self.info(f"Error revealing in Finder: {e}")
 
     # -------------------------------------------------------------------------

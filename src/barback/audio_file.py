@@ -9,6 +9,7 @@ import soundfile as sf
 from numpy.typing import NDArray
 
 from barback.audio_processor import AudioProcessor
+from barback.util.logger import get_logger
 from barback.util.types import LoopResponse
 
 
@@ -21,6 +22,7 @@ class AudioFile:
     def __init__(self, filename: Path):
         self.filename: Path = Path(filename)
         self.loaded: bool = False
+        self.logger = get_logger()
 
     @property
     def duration(self) -> float:
@@ -36,12 +38,23 @@ class AudioFile:
 
     def load(self, sample_rate: float = 0, mono: bool = False) -> None:
         if self.loaded:
+            self.logger.warning(
+                f"Attempted to load already loaded file: {self.filename}"
+            )
             raise AudioFileError(f"Tried to load already loaded file {self.filename}")
         if sample_rate == 0:
             sample_rate = self.sample_rate
         try:
+            self.logger.debug(
+                f"Loading audio file: {self.filename.name} (sr={sample_rate}, mono={mono}"
+            )
             self.audio, sr = librosa.load(self.filename, sr=sample_rate, mono=mono)
         except Exception as e:
+            self.logger.error(
+                f"Failed to load audio file: {self.filename.name}",
+                extra={"filepath": self.filename},
+                exc_info=True,
+            )
             raise AudioFileError(
                 f"Unexpected error loading file {self.filename}: {type(e).__name__}, {e}"
             )
@@ -49,9 +62,11 @@ class AudioFile:
 
     def unload(self) -> None:
         if not self.loaded:
+            self.logger.warning(f"Attempted to unload non-loaded file: {self.filename}")
             raise AudioFileError(
                 f"Tried to unload non-loaded audio file {self.filename}"
             )
+        self.logger.debug(f"Unloading audio file: {self.filename.name}")
         del self.audio
         self.loaded = False
 

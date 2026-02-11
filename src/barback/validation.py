@@ -5,18 +5,24 @@ import re
 from typing import Iterable, List
 
 from barback.audio_file import AudioFile
+from barback.util.logger import get_logger
 from barback.util.types import Issue
 
 
 def check_format_sr_bd(af: AudioFile) -> List[Issue]:
     """44.1 kHz, 24‑bit, .wav only."""
+    logger = get_logger()
     issues: List[Issue] = []
 
     ext = af.filename.suffix.lower()
     if ext != ".wav":
+        logger.debug(f"SRBD: {af.filename.name} - Not a WAV file ({ext})")
         issues.append(Issue("SR/BD", "not a wav file"))
 
     if af.sample_rate != 44100:
+        logger.debug(
+            f"SRBD: {af.filename.name} - Incorrect sample rate ({af.sample_rate}Hz)"
+        )
         issues.append(
             Issue(
                 "SR/BD",
@@ -25,6 +31,7 @@ def check_format_sr_bd(af: AudioFile) -> List[Issue]:
         )
 
     if af.bit_depth != "PCM_24":
+        logger.debug(f"SRBD: {af.filename.name} - Incorrect bit depth ({af.bit_depth})")
         issues.append(
             Issue(
                 "SR/BD",
@@ -37,6 +44,7 @@ def check_format_sr_bd(af: AudioFile) -> List[Issue]:
 
 def check_silence(af: AudioFile) -> List[Issue]:
     """Silence at start/end, with tighter restriction on non‑loops."""
+    logger = get_logger()
     issues: List[Issue] = []
 
     start, end = af.get_start_end_silence()
@@ -46,16 +54,19 @@ def check_silence(af: AudioFile) -> List[Issue]:
 
     # start
     if not is_loop_like and start >= 500:
+        logger.debug(f"Silence: {af.filename.name} - {start} samples at the start")
         issues.append(
             Issue("Silence", f"{start} samples at the start"),
         )
     elif start >= 22050:
+        logger.debug(f"Silence: {af.filename.name} - {start} samples at the start")
         issues.append(
             Issue("Silence", f"{start} samples at the start"),
         )
 
     # end
     if end >= 22050:
+        logger.debug(f"Silence: {af.filename.name} - {end} samples at the end")
         issues.append(
             Issue("Silence", f"{end} samples at the end"),
         )
@@ -65,20 +76,21 @@ def check_silence(af: AudioFile) -> List[Issue]:
 
 def check_zero_crossing(af: AudioFile) -> List[Issue]:
     """Clicks/pops at start/end."""
+    logger = get_logger()
     issues: List[Issue] = []
 
     nonzeros = af.get_start_end_zero_crossing()
     if not nonzeros:
         return issues
 
-    # original finalizer had “return f'nonzero values at {nonzeros}'”
+    logger.debug(f"ZC: {af.filename.name} - nonzero values at {nonzeros}")
     issues.append(
         Issue("ZC", f"nonzero values at {nonzeros}"),
     )
     return issues
 
 
-def check_loop_basic(af: AudioFile) -> List[Issue]:
+def check_loop(af: AudioFile) -> List[Issue]:
     """
     Loop validity based on BPM/bars/expected samples.
 
@@ -88,6 +100,7 @@ def check_loop_basic(af: AudioFile) -> List[Issue]:
     - compares actual vs expected sample count,
     - returns (is_loop, message, bpm, num_bars).
     """
+    logger = get_logger()
     issues: List[Issue] = []
 
     # If filename does not suggest loop, skip this check
@@ -102,14 +115,16 @@ def check_loop_basic(af: AudioFile) -> List[Issue]:
     msg = resp.response
 
     if "bpm out of range" in msg:
+        logger.debug(f"Loop: {af.filename.name} - bpm out of range")
         issues.append(Issue("Loop", "does not loop (bpm out of range)"))
     elif "no bpm found" in msg:
+        logger.debug(f"Loop: {af.filename.name} - does not loop (no bpm found)")
         issues.append(Issue("Loop", "does not loop (no bpm found)"))
     elif "off by" in msg:
-        # msg already contains difference text from AudioFile.is_loop()
+        logger.debug(f"Loop: {af.filename.name} - does not loop ({msg})")
         issues.append(Issue("Loop", f"does not loop ({msg})"))
     else:
-        # fallback
+        logger.debug(f"Loop: {af.filename.name} - does not loop ({msg})")
         issues.append(Issue("Loop", f"does not loop ({msg})"))
 
     return issues
@@ -121,6 +136,7 @@ _KEY_SIG_AT_END_REGEX = re.compile(r"^.*_[A-G](?:#|b)?(?:maj|min)?(?:\.wav)?$")
 
 def check_tonal_loop_key_signature(af: AudioFile) -> List[Issue]:
     """Tonal loops should have a key signature at the end of the filename."""
+    logger = get_logger()
     issues: List[Issue] = []
 
     basename = os.path.basename(str(af.filename))
@@ -129,6 +145,7 @@ def check_tonal_loop_key_signature(af: AudioFile) -> List[Issue]:
     # First: multiple key signatures anywhere
     key_sig_matches = _KEY_SIG_REGEX.findall(basename)
     if len(key_sig_matches) > 1:
+        logger.debug(f"Key sig: {af.filename.name} - multiple key signatures")
         issues.append(Issue("Key sig", "multiple key signatures"))
         # Still continue; filename format may also be wrong.
 
@@ -138,6 +155,9 @@ def check_tonal_loop_key_signature(af: AudioFile) -> List[Issue]:
 
     if not any(s in lowercase_name for s in ("drum", "perc", "hihat")):
         if not _KEY_SIG_AT_END_REGEX.match(basename):
+            logger.debug(
+                f"Key sig: {af.filename.name} - does not have a key signature but is a tonal loop"
+            )
             issues.append(
                 Issue(
                     "Key sig",
@@ -157,12 +177,30 @@ def validate_audio_file(af: AudioFile) -> list[Issue]:
     - calling af.load(mono=True/False) before this,
     - calling af.unload() afterwards.
     """
+    logger = get_logger()
+    logger.debug(
+        f"Starting validation: {af.filename.name}", extra={"filepath": af.filename}
+    )
+
     issues: list[Issue] = []
     issues.extend(check_format_sr_bd(af))
     issues.extend(check_silence(af))
     issues.extend(check_zero_crossing(af))
-    issues.extend(check_loop_basic(af))
+    issues.extend(check_loop(af))
     issues.extend(check_tonal_loop_key_signature(af))
+
+    if issues:
+        issue_summary = ", ".join(f"{i.kind}" for i in issues)
+        logger.debug(
+            f"Validation complete: {af.filename.name} - {len(issues)} issue(s): {issue_summary}",
+            extra={"filepath": af.filename, "issues": len(issues)},
+        )
+    else:
+        logger.debug(
+            f"Validation complete: {af.filename.name} - No issues",
+            extra={"filepath": af.filename},
+        )
+
     return issues
 
 

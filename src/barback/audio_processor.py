@@ -5,13 +5,18 @@ import numpy as np
 import soundfile as sf
 from pedalboard import Pedalboard, load_plugin
 
+from barback.util.logger import get_logger
+
 
 class AudioProcessor:
     def __init__(self):
+        self.logger = get_logger()
         self.good_dither = self.load_goodhertz_plugin()
 
     def load_goodhertz_plugin(self):
         """Locate and load Goodhertz Good Dither plugin."""
+        self.logger.info("Attempting to load Goodhertz Good Dither plugin")
+
         possible_paths = [
             "/Library/Audio/Plug-Ins/VST3/Ghz Good Dither 3.vst3",
             "~/Library/Audio/Plug-Ins/VST3/Ghz Good Dither 3.vst3",
@@ -23,11 +28,12 @@ class AudioProcessor:
             if path.exists():
                 try:
                     plugin = load_plugin(str(path))
+                    self.logger.info(f"Loaded Goodhertz Good Dither from: {path}")
                     return plugin
                 except Exception as e:
-                    print(f"Failed to load {path}: {e}")
+                    self.logger.warning(f"Failed to load plugin from {path}: {e}")
                     continue
-        print("Warning: Goodhertz Good Dither not found, using basic dithering")
+        self.logger.warning("Goodhertz Good Dither not found, using basic dithering")
         return None
 
     def fix_srbd(
@@ -38,22 +44,30 @@ class AudioProcessor:
     ) -> None:
         """
         Convert audio to target sample rate and bit depth.
-        PRESERVES STEREO/MONO channel configuration.
-        Deletes and recreates file to trigger file watcher.
 
         Args:
             input_path: Source audio file (will be deleted and recreated)
             target_sr: Target sample rate (default: 44100)
             target_bits: Target bit depth (default: 24)
         """
-        # Load audio - always_2d=False means mono is 1D, stereo is 2D
-        audio, sr = sf.read(input_path, always_2d=False)
+        self.logger.info(
+            f"Starting SRBD fix: {input_path.name} -> {target_sr}Hz, {target_bits}bit",
+            extra={
+                "filepath": input_path,
+                "target_sr": target_sr,
+                "target_bits": target_bits,
+            },
+        )
 
-        # Determine if stereo
+        # Load audio
+        audio, sr = sf.read(input_path, always_2d=False)
+        original_sr = sr
         is_stereo = audio.ndim == 2
+        self.logger.debug(f"Loaded {input_path.name}: {sr}Hz, shape={audio.shape}")
 
         # Resample if needed
         if sr != target_sr:
+            self.logger.debug(f"Resampling {input_path.name}: {sr}Hz -> {target_sr}Hz")
             if is_stereo:
                 # Resample each channel separately
                 audio = np.column_stack(
@@ -76,16 +90,29 @@ class AudioProcessor:
 
         # Apply dithering
         if self.good_dither is not None:
+            self.logger.debug(f"Applying Goodhertz dither to {input_path.name}")
             audio = self.apply_goodhertz_dither(audio, sr, target_bits)
         else:
+            self.logger.debug(f"Applying basic dither to {input_path.name}")
             audio = self.apply_basic_dither(audio, target_bits)
 
         # Write to temp file, delete original, rename
         temp_file = input_path.with_suffix(".tmp.wav")
         subtype_map = {16: "PCM_16", 24: "PCM_24", 32: "PCM_32"}
+
+        self.logger.debug(f"Writing processed audio to temp file: {temp_file}")
         sf.write(temp_file, audio, sr, subtype=subtype_map.get(target_bits, "PCM_24"))
         input_path.unlink()
         temp_file.rename(input_path)
+
+        self.logger.info(
+            f"Completed SRBD fix: {input_path.name}",
+            extra={
+                "filepath": input_path,
+                "original_sr": original_sr,
+                "new_sr": target_sr,
+            },
+        )
 
     def apply_microfades(
         self,
@@ -95,31 +122,35 @@ class AudioProcessor:
     ) -> None:
         """
         Apply linear microfades to beginning and end of audio file.
-        PRESERVES STEREO/MONO channel configuration.
-        Deletes and recreates file to trigger file watcher.
 
         Args:
             input_path: Source audio file (will be deleted and recreated)
             fadein_samples: Number of samples for fade in (default: 35)
             fadeout_samples: Number of samples for fade out (default: 90)
         """
-        # Load the audio file - preserves stereo/mono
-        audio, sr = sf.read(input_path, always_2d=False)
+        self.logger.info(
+            f"Starting microfade application: {input_path.name} (in={fadein_samples}, out={fadeout_samples})",
+            extra={
+                "filepath": input_path,
+                "fadein_samples": fadein_samples,
+                "fadeout_samples": fadeout_samples,
+            },
+        )
 
-        # Get file info to preserve bit depth
+        # Load audio
+        audio, sr = sf.read(input_path, always_2d=False)
         info = sf.info(input_path)
         subtype = info.subtype
-
-        # Determine if stereo
         is_stereo = audio.ndim == 2
-
-        # Get total samples
         total_samples = len(audio)
 
         # Ensure fades don't exceed 25% of file length each
         max_fade = total_samples // 4
         fadein_samples = min(fadein_samples, max_fade)
         fadeout_samples = min(fadeout_samples, max_fade)
+        self.logger.debug(
+            f"Applying fades: {fadein_samples}s in, {fadeout_samples} out"
+        )
 
         # Apply fade in
         if fadein_samples > 0:
@@ -141,11 +172,16 @@ class AudioProcessor:
                 # Mono
                 audio[-fadeout_samples:] *= fade_out_curve
 
-        # Write to temp file, delete original, rename
         temp_file = input_path.with_suffix(".tmp.wav")
+        self.logger.debug(f"Writing processed audio to temp file: {temp_file}")
         sf.write(temp_file, audio, sr, subtype=subtype)
         input_path.unlink()
         temp_file.rename(input_path)
+
+        self.logger.info(
+            f"Completed microfade application: {input_path.name}",
+            extra={"filepath": input_path},
+        )
 
     def apply_goodhertz_dither(
         self, audio: np.ndarray, sr: int, target_bits: int

@@ -8,6 +8,7 @@ from watchfiles import Change, awatch
 
 from barback.audio_file import AudioFileError
 from barback.state import BarbackState
+from barback.util.logger import get_logger
 from barback.util.messages import TableUpdate
 from barback.util.protocol import BarbackProtocol
 from barback.workers.file_processor import process_file_with_validation
@@ -64,6 +65,10 @@ async def _handle_file_added(
     path: Path,
 ) -> None:
     """Process a newly created file."""
+    logger = get_logger()
+    logger.info(
+        f"File watcher: New file detected - {path.name}", extra={"filepath": path}
+    )
     app.info(f"New file detected: {path.name}")
 
     # Process in executor
@@ -99,9 +104,18 @@ async def _handle_file_deleted(
     path: Path,
 ) -> None:
     """Remove a deleted file from the table."""
+    logger = get_logger()
+
     if path in state.audio_data:
         state.audio_data.delete_row(path)
         app.post_message(TableUpdate("file_deleted"))
+        logger.info(
+            f"File watcher: File deleted - {path.name}", extra={"filepath": path}
+        )
         app.info(f"File deleted: {path.name}")
     else:
+        logger.info(
+            f"File watcher: File deleted but not in table - {path.name}",
+            extra={"filepath": path},
+        )
         app.info(f"File deleted but not in table: {path.name}")
