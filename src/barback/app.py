@@ -6,6 +6,7 @@ from typing import Any
 from textual.app import App
 from textual.binding import Binding
 from textual.containers import Container
+from textual.coordinate import Coordinate
 from textual.widgets import Footer, Header, Input, ProgressBar, Rule, Static
 
 from barback.audio_processor import AudioProcessor
@@ -104,15 +105,9 @@ class Barback(App):
     def on_barback_loaded(self, message: BarbackLoaded) -> None:
         """Called when initial scan completes."""
         self.state.loaded = True
-
-        # Hide progress bar
         progress = self.query_one("#progress", ProgressBar)
         progress.display = False
-
-        # Start file watcher now that initial load is done
         watch_files(self, self.state)
-
-        self.info(f"Watching {self.state.audio_dir} for changes")
 
     def on_table_update(self, message: TableUpdate) -> None:
         """Refresh the table whenever data changes."""
@@ -271,8 +266,7 @@ class Barback(App):
             return None
 
         try:
-            # Get the filename from the first column of the current row
-            filename_display = table.get_cell_at((table.cursor_row, 0))
+            filename_display = table.get_cell_at(Coordinate(table.cursor_row, 0))
 
             # Strip Rich markup if present (from search highlighting)
             # Extract just the filename by removing markup tags
@@ -298,7 +292,6 @@ class Barback(App):
 
         row = self.state.audio_data.get_row(file_path)
         if row and row.issues:
-            # Return the kind of the first issue
             return row.issues[0].kind
 
         return None
@@ -360,7 +353,9 @@ class Barback(App):
 
     def action_exit_search_mode(self) -> None:
         """Exit search mode and clear search."""
-        self.logger.debug(f"Exited search mode (query was: '{self.state.searchquery}')")
+        self.logger.debug(
+            f"Exited search mode (query was: '{self.state.search_query}')"
+        )
         if not self.state.search_mode:
             return
 

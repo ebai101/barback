@@ -66,13 +66,8 @@ async def _handle_file_added(
 ) -> None:
     """Process a newly created file."""
     logger = get_logger()
-    logger.info(
-        f"File watcher: New file detected - {path.name}", extra={"filepath": path}
-    )
-    app.info(f"New file detected: {path.name}")
-
-    # Process in executor
     loop = asyncio.get_event_loop()
+
     try:
         row = await loop.run_in_executor(
             executor,
@@ -83,19 +78,27 @@ async def _handle_file_added(
         if row is None:
             raise AudioFileError("failed to process audio file")
 
-        # Add to table
         state.audio_data.add_row(row)
         app.post_message(TableUpdate("file_added"))
 
-        # User feedback
         if row.issues:
             issue_count = len(row.issues)
-            app.info(f"Added {path.name} ({issue_count} issues)")
+            logger.debug(
+                f"File watcher: Added file ({issue_count} issues) - {path.name}",
+                extra={"filepath": path},
+            )
         else:
-            app.info(f"Added {path.name} (no issues)")
+            logger.debug(
+                f"File watcher: Added file (no issues) - {path.name}",
+                extra={"filepath": path},
+            )
 
-    except Exception as e:
-        app.info(f"Error processing {path.name}: {e}")
+    except Exception:
+        logger.debug(
+            f"File watcher: Failed to add file - {path.name}",
+            extra={"filepath": path},
+            exc_info=True,
+        )
 
 
 async def _handle_file_deleted(
@@ -109,13 +112,11 @@ async def _handle_file_deleted(
     if path in state.audio_data:
         state.audio_data.delete_row(path)
         app.post_message(TableUpdate("file_deleted"))
-        logger.info(
+        logger.debug(
             f"File watcher: File deleted - {path.name}", extra={"filepath": path}
         )
-        app.info(f"File deleted: {path.name}")
     else:
-        logger.info(
+        logger.debug(
             f"File watcher: File deleted but not in table - {path.name}",
             extra={"filepath": path},
         )
-        app.info(f"File deleted but not in table: {path.name}")

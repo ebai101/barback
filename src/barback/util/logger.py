@@ -23,7 +23,7 @@ class BarbackLogger:
 
         self._initialized = True
         self.logger = logging.getLogger("barback")
-        self.logger.setLevel(logging.DEBUG)
+        self.logger.setLevel(logging.INFO)
 
         # Prevent duplicate handlers
         if self.logger.handlers:
