@@ -33,16 +33,16 @@ def _fix_srbd_single_file(
     )
     try:
         processor.fix_srbd(filepath)
-        duration = time.time() - start_time
+        duration = (time.time() - start_time) * 1000
         logger.info(
-            f"Successfully fixed SRBD for: {filepath.name} in {duration:.2f}s",
+            f"Successfully fixed SRBD for: {filepath.name} in {duration:.2f}ms",
             extra={"filepath": filepath, "operation": "fix_srbd", "duration": duration},
         )
         return (filepath, True, "")
     except Exception as e:
-        duration = time.time() - start_time
+        duration = (time.time() - start_time) * 1000
         logger.error(
-            f"Failed to fix SRBD for: {filepath.name} after {duration:.2f}s",
+            f"Failed to fix SRBD for: {filepath.name} after {duration:.2f}ms",
             extra={"filepath": filepath, "operation": "fix_srbd", "duration": duration},
             exc_info=True,
         )
@@ -142,16 +142,16 @@ def _fix_zc_single_file(
     )
     try:
         processor.apply_microfades(filepath, fadein_samples, fadeout_samples)
-        duration = time.time() - start_time
+        duration = (time.time() - start_time) * 1000
         logger.info(
-            f"Successfully fixed ZC for: {filepath.name} in {duration:.2f}s",
+            f"Successfully fixed ZC for: {filepath.name} in {duration:.2f}ms",
             extra={"filepath": filepath, "operation": "fix_zc", "duration": duration},
         )
         return (filepath, True, "")
     except Exception as e:
-        duration = time.time() - start_time
+        duration = (time.time() - start_time) * 1000
         logger.error(
-            f"Failed to fix ZC for: {filepath.name} after {duration:.2f}s",
+            f"Failed to fix ZC for: {filepath.name} after {duration:.2f}ms",
             extra={"filepath": filepath, "operation": "fix_zc", "duration": duration},
             exc_info=True,
         )
