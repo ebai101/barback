@@ -6,7 +6,6 @@ from typing import Any
 from textual.app import App
 from textual.binding import Binding
 from textual.containers import Container
-from textual.coordinate import Coordinate
 from textual.widgets import Footer, Header, Input, ProgressBar, Rule, Static
 
 from barback.audio_processor import AudioProcessor
@@ -21,11 +20,12 @@ from barback.validation import summarize_issues
 from barback.widgets.audio_table import AudioTable
 from barback.widgets.fix_dialog import FixTypeDialog
 from barback.workers.audio_fixer import (
-    fix_all_issues_files,
-    fix_microfades_all_files,
-    fix_microfades_selected_file,
-    fix_sr_bd_all_files,
-    fix_sr_bd_selected_file,
+    fix_all_issues_all_files,
+    fix_all_issues_selected_file,
+    fix_srbd_all_files,
+    fix_srbd_selected_file,
+    fix_zc_all_files,
+    fix_zc_selected_file,
 )
 from barback.workers.file_processor import init_audio_data
 from barback.workers.file_watcher import watch_files
@@ -34,7 +34,6 @@ from barback.workers.file_watcher import watch_files
 class Barback(App):
     CSS_PATH = "barback.tcss"
     BINDINGS = [
-        Binding("q", "quit", "Quit", show=False, priority=True),
         Binding("j", "cursor_down", "Down", show=False),
         Binding("k", "cursor_up", "Up", show=False),
         Binding("a", "toggle_show_all", "Toggle All/Issues"),
@@ -46,7 +45,7 @@ class Barback(App):
         Binding("R", "fix_all_issues", "Fix All"),
         Binding("f", "reveal_in_finder", "Finder"),
         Binding("/", "enter_search_mode", "Search", show=False),
-        Binding("escape", "exit_search_mode", "Exit Search", show=False, priority=True),
+        Binding("escape", "exit_search_mode", "Exit Search", show=False),
     ]
 
     def __init__(self, audio_dir: str) -> None:
@@ -488,120 +487,104 @@ class Barback(App):
             self.info("No file selected")
             return
 
-        # Get the filename for display
+        row = self.state.audio_data.get_row(filepath)
+        if not row:
+            self.info("No row selected")
+            return
+
+        has_srbd = any(i.kind == "SR/BD" for i in (row.issues or []))
+        has_zc = any(i.kind == "ZC" for i in (row.issues or []))
         filename = filepath.name
 
-        # Show the dialog
         def handle_fix_selection(fix_type: str | None) -> None:
             if fix_type is None:
                 self.info("Fix cancelled")
                 return
 
             if fix_type == "fix_srbd":
-                # Original SR/BD fix
-                row = self.state.audio_data.get_row(filepath)
-                if not row or not any(i.kind == "SR/BD" for i in (row.issues or [])):
-                    raise Exception(row)
+                if not has_srbd:
                     self.info("Selected file has no SR/BD issues")
                     return
-                fix_sr_bd_selected_file(
-                    self, self.state, self.audio_processor, filepath
-                )
+                fix_srbd_selected_file(self, self.state, self.audio_processor, filepath)
 
-            elif fix_type == "fix_microfades":
-                # New microfades fix
-                fix_microfades_selected_file(
-                    self, self.state, self.audio_processor, filepath
-                )
+            elif fix_type == "fix_zc":
+                if not has_zc:
+                    self.info("Selected file has no ZC issues")
+                    return
+                fix_zc_selected_file(self, self.state, self.audio_processor, filepath)
 
             elif fix_type == "fix_all":
-                # Apply all fixes
-                # First check if SR/BD is needed
-                row = self.state.audio_data.get_row(filepath)
-                has_srbd = row and any(i.kind == "SR/BD" for i in (row.issues or []))
+                fix_all_issues_selected_file(
+                    self, self.state, self.audio_processor, filepath
+                )
 
-                if has_srbd:
-                    # Use the combined fix
-                    import asyncio
-                    from concurrent.futures import ThreadPoolExecutor
+        # Immediately fix if there's only one issue
+        if row.issues and len(row.issues) == 1:
+            match row.issues[0].kind:
+                case "SR/BD":
+                    handle_fix_selection("fix_srbd")
+                    return
+                case "ZC":
+                    handle_fix_selection("fix_zc")
+                    return
 
-                    from barback.workers.audio_fixer import fix_all_issues_single_file
-
-                    async def apply_all():
-                        executor = ThreadPoolExecutor(max_workers=1)
-                        try:
-                            self.info(f"Applying all fixes to {filepath.name}...")
-                            loop = asyncio.get_event_loop()
-                            _, success, error = await loop.run_in_executor(
-                                executor,
-                                fix_all_issues_single_file,
-                                self.audio_processor,
-                                filepath,
-                            )
-                            if success:
-                                self.info(f"Applied all fixes to {filepath.name}")
-                            else:
-                                self.info(f"Error: {error}")
-                        finally:
-                            executor.shutdown(wait=True)
-
-                    self.run_worker(apply_all())
-                else:
-                    # Just apply microfades
-                    fix_microfades_selected_file(
-                        self, self.state, self.audio_processor, filepath
-                    )
-
+        # Otherwise show the dialog
         self.push_screen(
-            FixTypeDialog(filename=filename, is_all=False), handle_fix_selection
+            FixTypeDialog(
+                filename=filename,
+                is_all=False,
+                file_count=1,
+                has_srbd=has_srbd,
+                has_zc=has_zc,
+            ),
+            handle_fix_selection,
         )
 
     def action_fix_all_issues(self) -> None:
         """Show dialog to select fix type for all files."""
 
+        srbd_files = self._get_files_with_issue_kind("SR/BD")
+        zc_files = self._get_files_with_issue_kind("ZC")
+
+        if self.state.show_all_files:
+            all_files = [row.file.filename for row in self.state.audio_data]
+        else:
+            all_files = [
+                row.file.filename for row in self.state.audio_data if row.issues
+            ]
+
+        if not all_files:
+            self.info("No files to process")
+            return
+
+        has_srbd = len(srbd_files) > 0
+        has_zc = len(zc_files) > 0
+
         def handle_fix_selection(fix_type: str | None) -> None:
             if fix_type is None:
                 self.info("Fix cancelled")
                 return
 
             if fix_type == "fix_srbd":
-                # Original SR/BD fix for all
-                srbd_files = self._get_files_with_issue_kind("SR/BD")
                 if not srbd_files:
                     self.info("No SR/BD issues found")
                     return
-                fix_sr_bd_all_files(self, self.state, self.audio_processor, srbd_files)
+                fix_srbd_all_files(self, self.state, self.audio_processor, srbd_files)
 
-            elif fix_type == "fix_microfades":
-                # Apply microfades to all files (or all with issues)
-                if self.state.show_all_files:
-                    all_files = [row.file.filename for row in self.state.audio_data]
-                else:
-                    all_files = [
-                        row.file.filename for row in self.state.audio_data if row.issues
-                    ]
-
-                if not all_files:
-                    self.info("No files to process")
+            elif fix_type == "fix_zc":
+                if not zc_files:
+                    self.info("No ZC issues found")
                     return
+                fix_zc_all_files(self, self.state, self.audio_processor, all_files)
 
-                fix_microfades_all_files(
+            elif fix_type == "fix_all":
+                fix_all_issues_all_files(
                     self, self.state, self.audio_processor, all_files
                 )
 
-            elif fix_type == "fix_all":
-                # Apply all fixes to all files
-                if self.state.show_all_files:
-                    all_files = [row.file.filename for row in self.state.audio_data]
-                else:
-                    all_files = [
-                        row.file.filename for row in self.state.audio_data if row.issues
-                    ]
-
-                if not all_files:
-                    self.info("No files to process")
-                    return
-
-                fix_all_issues_files(self, self.state, self.audio_processor, all_files)
-
-        self.push_screen(FixTypeDialog(is_all=True), handle_fix_selection)
+        self.push_screen(
+            FixTypeDialog(
+                is_all=True, file_count=len(all_files), has_srbd=has_srbd, has_zc=has_zc
+            ),
+            handle_fix_selection,
+        )

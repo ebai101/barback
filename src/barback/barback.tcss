@@ -16,3 +16,58 @@
 #search {
     display: none;
 }
+
+FixTypeDialog {
+    align: center middle;
+}
+
+#fix_dialog {
+    width: 60;
+    height: auto;
+    background: $surface;
+    border: thick $primary;
+    padding: 1 2;
+}
+
+#fix_dialog_title {
+    text-align: center;
+    text-style: bold;
+    color: $primary;
+    content-align: center middle;
+    height: 1;
+    margin-bottom: 1;
+}
+
+#fix_dialog_info {
+    text-align: center;
+    color: $text-muted;
+    content-align: center middle;
+    height: 1;
+    margin-bottom: 1;
+}
+
+#fix_options {
+    height: auto;
+    max-height: 10;
+    border: none;
+    background: $surface;
+}
+
+#fix_options > .option-list--option {
+    padding: 0 2;
+}
+
+#fix_options > .option-list--option-highlighted {
+    background: $primary;
+    color: $text;
+    text-style: bold;
+}
+
+#fix_dialog_help {
+    text-align: center;
+    color: $text-muted;
+    content-align: center middle;
+    height: 1;
+    margin-top: 1;
+    text-style: italic;
+}

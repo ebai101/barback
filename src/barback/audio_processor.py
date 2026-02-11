@@ -30,7 +30,7 @@ class AudioProcessor:
         print("Warning: Goodhertz Good Dither not found, using basic dithering")
         return None
 
-    def fix_sample_rate_and_bit_depth(
+    def fix_srbd(
         self,
         input_path: Path,
         target_sr: int = 44100,

@@ -217,4 +217,4 @@ class AudioFile:
         Automatically fix samplerate and bit depth issues.
         Returns path to fixed file.
         """
-        return processor.fix_sr_bd(self.filename, target_sr=44100, target_bits=24)
+        return processor.fix_srbd(self.filename, target_sr=44100, target_bits=24)
