@@ -32,7 +32,7 @@ class AudioProcessor:
         print("Warning: Goodhertz Good Dither not found, using basic dithering")
         return None
 
-    def fix_samplerate_and_bitdepth(
+    def fix_sr_bd(
         self, input_path: Path, target_sr: int = 44100, target_bits: int = 24
     ) -> None:
         """
@@ -78,3 +78,47 @@ class AudioProcessor:
         dithered = audio + dither
         quantized = np.round(dithered / q_step) * q_step
         return np.clip(quantized, -1.0, 1.0)
+
+    def apply_microfades(
+        self, input_path: Path, fadein_samples: int = 35, fadeout_samples: int = 90
+    ) -> None:
+        """
+        Apply linear microfades to the beginning and end of an audio file.
+        Deletes and recreates the file to trigger the file watcher.
+
+        Args:
+            input_path: Source audio file (will be deleted and recreated)
+            fadein_samples: Number of samples for fade in (default: 35)
+            fadeout_samples: Number of samples for fade out (default: 90)
+        """
+        # Load the audio file
+        audio, sr = sf.read(input_path, always_2d=False)
+
+        # Ensure we don't exceed audio length
+        total_samples = len(audio) if audio.ndim == 1 else audio.shape[0]
+        fadein_samples = min(fadein_samples, total_samples // 4)
+        fadeout_samples = min(fadeout_samples, total_samples // 4)
+
+        # Apply fade in
+        if fadein_samples > 0:
+            fade_in_curve = np.linspace(0, 1, fadein_samples)
+            if audio.ndim == 1:
+                audio[:fadein_samples] *= fade_in_curve
+            else:
+                audio[:fadein_samples] *= fade_in_curve[:, np.newaxis]
+
+        # Apply fade out
+        if fadeout_samples > 0:
+            fade_out_curve = np.linspace(1, 0, fadeout_samples)
+            if audio.ndim == 1:
+                audio[-fadeout_samples:] *= fade_out_curve
+            else:
+                audio[-fadeout_samples:] *= fade_out_curve[:, np.newaxis]
+
+        info = sf.info(input_path)
+        subtype = info.subtype
+
+        temp_file = input_path.with_suffix(".tmp.wav")
+        sf.write(temp_file, audio, sr, subtype=subtype)
+        input_path.unlink()
+        temp_file.rename(input_path)
