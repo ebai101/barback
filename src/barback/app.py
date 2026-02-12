@@ -40,18 +40,44 @@ from barback.workers.file_watcher import watch_files
 class Barback(App):
     CSS_PATH = "barback.tcss"
     BINDINGS = [
-        Binding("j", "cursor_down", "Down", show=False),
-        Binding("k", "cursor_up", "Up", show=False),
-        Binding("a", "toggle_show_all", "Toggle All/Issues"),
-        Binding("x", "open_in_rx", "RX"),
-        Binding("X", "open_all_issue_type_in_rx", "RX (All Issue Type)"),
-        Binding("m", "open_in_myriad", "Myriad"),
-        Binding("M", "open_all_issue_type_in_myriad", "Myriad (All Issue Type)"),
-        Binding("r", "fix_selected", "Fix"),
-        Binding("R", "fix_all_issues", "Fix All"),
-        Binding("f", "reveal_in_finder", "Finder"),
-        Binding("/", "enter_search_mode", "Search", show=False),
-        Binding("escape", "exit_search_mode", "Exit Search", show=False),
+        Binding(
+            "a",
+            "toggle_show_all",
+            "Toggle All/Issues",
+            tooltip="Switch between viewing all files and only those with issues",
+        ),
+        Binding("x", "open_in_rx", "RX", tooltip="Open selected file in RX"),
+        Binding(
+            "X",
+            "open_all_issue_type_in_rx",
+            "RX All",
+            tooltip="Open all files with a specific issue in RX",
+        ),
+        Binding(
+            "m",
+            "open_in_myriad",
+            "Myriad",
+            tooltip="Open selected file in Myriad",
+        ),
+        Binding(
+            "M",
+            "open_all_issue_type_in_myriad",
+            "Myriad All",
+            tooltip="Open all files with a specific issue in Myriad",
+        ),
+        Binding("r", "fix_selected", "Fix", tooltip="Apply fixes to the selected file"),
+        Binding("R", "fix_all_issues", "Fix All", tooltip="Apply fixes to all files"),
+        Binding(
+            "f", "reveal_in_finder", "Reveal", tooltip="Reveal selected file in Finder"
+        ),
+        Binding(
+            "/",
+            "enter_search_mode",
+            "Search",
+            show=False,
+            tooltip="Filter files by search term",
+        ),
+        Binding("escape", "exit_search_mode", "Exit Search", show=False, system=True),
     ]
 
     def __init__(self, audio_dir: str) -> None:
