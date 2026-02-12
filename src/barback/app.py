@@ -186,7 +186,7 @@ class Barback(App):
             rows_to_display = [
                 row
                 for row in rows_to_display
-                if self.state.search_query in row.file.filename.name.lower()
+                if self.state.search_query in row.file.file_path.name.lower()
             ]
 
         # Populate table
@@ -198,7 +198,7 @@ class Barback(App):
                 issue_summary = "—"
 
             # Highlight search query in filename if searching
-            filename_display = row.file.filename.name
+            filename_display = row.file.file_path.name
             if self.state.search_mode and self.state.search_query:
                 filename_display = self._highlight_search(
                     filename_display, self.state.search_query
@@ -215,7 +215,7 @@ class Barback(App):
                 str(row.bars) if row.bars else "—",
                 row.zc or "—",
                 issue_summary,
-                key=str(row.file.filename),  # Use full path as key for updates
+                key=str(row.file.file_path),  # Use full path as key for updates
             )
 
         # Restore cursor position, adjusting if needed
@@ -276,15 +276,15 @@ class Barback(App):
 
             # Search through audio_data to find the matching file by name
             for row in self.state.audio_data:
-                if row.file.filename.name == filename:
-                    return row.file.filename  # This is the full Path object
+                if row.file.file_path.name == filename:
+                    return row.file.file_path  # This is the full Path object
 
         except Exception as e:
             self.info(f"Error getting file path: {e}")
 
         return None
 
-    def _get_current_issue_kind(self) -> str | None:
+    def _get_selected_issue_kind(self) -> str | None:
         """Get the issue kind from the currently selected row."""
         file_path = self._get_selected_file_path()
         if not file_path:
@@ -296,17 +296,17 @@ class Barback(App):
 
         return None
 
-    def _get_files_with_issue_kind(self, issue_kind: str) -> list[Path]:
+    def _get_audiofiles_with_issue_kind(self, issue_kind: str) -> list[Path]:
         """Get all files that have issues of the specified kind."""
         files = []
         for row in self.state.audio_data:
             if row.issues:
                 if any(issue.kind == issue_kind for issue in row.issues):
                     if self.state.search_mode and self.state.search_query:
-                        if self.state.search_query in row.file.filename.name.lower():
-                            files.append(row.file.filename)
+                        if self.state.search_query in row.file.file_path.name.lower():
+                            files.append(row.file)
                     else:
-                        files.append(row.file.filename)
+                        files.append(row.file)
         return files
 
     # -------------------------------------------------------------------------
@@ -401,12 +401,12 @@ class Barback(App):
 
     def action_open_all_issue_type_in_rx(self) -> None:
         """Open all files with the same issue type in iZotope RX."""
-        issue_kind = self._get_current_issue_kind()
+        issue_kind = self._get_selected_issue_kind()
         if not issue_kind:
             self.info("No issue selected")
             return
 
-        files = self._get_files_with_issue_kind(issue_kind)
+        files = self._get_audiofiles_with_issue_kind(issue_kind)
         if not files:
             self.info(f"No files with {issue_kind} issues")
             return
@@ -416,15 +416,17 @@ class Barback(App):
         if len(files) > MAX_FILES:
             files = files[:MAX_FILES]
             self.logger.warning(
-                f"Opening {MAX_FILES}/{len(self._get_files_with_issue_kind(issue_kind))} files in RX (limit reached)",
+                f"Opening {MAX_FILES}/{len(self._get_audiofiles_with_issue_kind(issue_kind))} files in RX (limit reached)",
                 extra={
                     "issue_kind": issue_kind,
-                    "total_files": len(self._get_files_with_issue_kind(issue_kind)),
+                    "total_files": len(
+                        self._get_audiofiles_with_issue_kind(issue_kind)
+                    ),
                 },
             )
             self.info(
                 f"Opening first {MAX_FILES} {issue_kind} issues in RX "
-                f"({len(self._get_files_with_issue_kind(issue_kind))} total)"
+                f"({len(self._get_audiofiles_with_issue_kind(issue_kind))} total)"
             )
         else:
             self.logger.info(
@@ -468,12 +470,12 @@ class Barback(App):
 
     def action_open_all_issue_type_in_myriad(self) -> None:
         """Open all files with the same issue type in Myriad."""
-        issue_kind = self._get_current_issue_kind()
+        issue_kind = self._get_selected_issue_kind()
         if not issue_kind:
             self.info("No issue selected")
             return
 
-        files = self._get_files_with_issue_kind(issue_kind)
+        files = self._get_audiofiles_with_issue_kind(issue_kind)
         if not files:
             self.info(f"No files with {issue_kind} issues")
             return
@@ -525,19 +527,20 @@ class Barback(App):
 
     def action_fix_selected(self) -> None:
         """Show dialog to select fix type for the selected file."""
-        filepath = self._get_selected_file_path()
-        if not filepath:
+        file_path = self._get_selected_file_path()
+        if not file_path:
             self.info("No file selected")
             return
 
-        row = self.state.audio_data.get_row(filepath)
+        row = self.state.audio_data.get_row(file_path)
         if not row:
             self.info("No row selected")
             return
 
         has_srbd = any(i.kind == "SR/BD" for i in (row.issues or []))
         has_zc = any(i.kind == "ZC" for i in (row.issues or []))
-        filename = filepath.name
+        file_name = file_path.name
+        af = row.file
 
         def handle_fix_selection(fix_type: str | None) -> None:
             if fix_type is None:
@@ -548,18 +551,16 @@ class Barback(App):
                 if not has_srbd:
                     self.info("Selected file has no SR/BD issues")
                     return
-                fix_srbd_selected_file(self, self.state, self.audio_processor, filepath)
+                fix_srbd_selected_file(self, self.state, self.audio_processor, af)
 
             elif fix_type == "fix_zc":
                 if not has_zc:
                     self.info("Selected file has no ZC issues")
                     return
-                fix_zc_selected_file(self, self.state, self.audio_processor, filepath)
+                fix_zc_selected_file(self, self.state, self.audio_processor, af)
 
             elif fix_type == "fix_all":
-                fix_all_issues_selected_file(
-                    self, self.state, self.audio_processor, filepath
-                )
+                fix_all_issues_selected_file(self, self.state, self.audio_processor, af)
 
         # Immediately fix if there's only one issue
         if row.issues and len(row.issues) == 1:
@@ -574,7 +575,7 @@ class Barback(App):
         # Otherwise show the dialog
         self.push_screen(
             FixTypeDialog(
-                filename=filename,
+                filename=file_name,
                 is_all=False,
                 file_count=1,
                 has_srbd=has_srbd,
@@ -586,15 +587,13 @@ class Barback(App):
     def action_fix_all_issues(self) -> None:
         """Show dialog to select fix type for all files."""
 
-        srbd_files = self._get_files_with_issue_kind("SR/BD")
-        zc_files = self._get_files_with_issue_kind("ZC")
+        srbd_files = self._get_audiofiles_with_issue_kind("SR/BD")
+        zc_files = self._get_audiofiles_with_issue_kind("ZC")
 
         if self.state.show_all_files:
-            all_files = [row.file.filename for row in self.state.audio_data]
+            all_files = [row.file for row in self.state.audio_data]
         else:
-            all_files = [
-                row.file.filename for row in self.state.audio_data if row.issues
-            ]
+            all_files = [row.file for row in self.state.audio_data if row.issues]
 
         if not all_files:
             self.info("No files to process")
@@ -618,7 +617,7 @@ class Barback(App):
                 if not zc_files:
                     self.info("No ZC issues found")
                     return
-                fix_zc_all_files(self, self.state, self.audio_processor, all_files)
+                fix_zc_all_files(self, self.state, self.audio_processor, zc_files)
 
             elif fix_type == "fix_all":
                 fix_all_issues_all_files(

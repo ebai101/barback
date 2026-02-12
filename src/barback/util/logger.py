@@ -30,7 +30,7 @@ class BarbackLogger:
             return
 
         # Log directory in user's home
-        log_dir = Path.home() / ".barback" / "logs"
+        log_dir = self.get_log_dir()
         log_dir.mkdir(parents=True, exist_ok=True)
 
         # Main log file with rotation (10MB max, keep 5 backups)

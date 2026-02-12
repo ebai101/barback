@@ -13,7 +13,7 @@ class Issue:
 
 @dataclass
 class LoopResponse:
-    filename: Path
+    file_path: Path
     is_loop: bool
     response: str
     bpm: int | None = None

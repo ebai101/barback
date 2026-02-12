@@ -2,9 +2,9 @@ from pathlib import Path
 
 import librosa
 import numpy as np
-import soundfile as sf
 from pedalboard import Pedalboard, load_plugin
 
+from barback.audio_file import AudioFile
 from barback.util.logger import get_logger
 
 
@@ -38,7 +38,7 @@ class AudioProcessor:
 
     def fix_srbd(
         self,
-        input_path: Path,
+        af: AudioFile,
         target_sr: int = 44100,
         target_bits: int = 24,
     ) -> None:
@@ -51,64 +51,65 @@ class AudioProcessor:
             target_bits: Target bit depth (default: 24)
         """
         self.logger.info(
-            f"Starting SRBD fix: {input_path.name} -> {target_sr}Hz, {target_bits}bit",
+            f"Starting SRBD fix: {af.file_path.name} -> {target_sr}Hz, {target_bits}bit",
             extra={
-                "filepath": input_path,
+                "filepath": af,
                 "target_sr": target_sr,
                 "target_bits": target_bits,
             },
         )
 
         # Load audio
-        audio, sr = sf.read(input_path, always_2d=False)
-        original_sr = sr
-        is_stereo = audio.ndim == 2
-        self.logger.debug(f"Loaded {input_path.name}: {sr}Hz, shape={audio.shape}")
+        af.load()
+        original_sr = af.sample_rate
+        is_stereo = af.audio.ndim == 2
+        self.logger.debug(
+            f"Loaded {af.file_path.name}: {original_sr}Hz, shape={af.audio.shape}"
+        )
 
         # Resample if needed
-        if sr != target_sr:
-            self.logger.debug(f"Resampling {input_path.name}: {sr}Hz -> {target_sr}Hz")
+        if af.sample_rate != target_sr:
+            self.logger.debug(
+                f"Resampling {af.file_path.name}: {original_sr}Hz -> {target_sr}Hz"
+            )
             if is_stereo:
                 # Resample each channel separately
-                audio = np.column_stack(
+                af.audio = np.column_stack(
                     [
                         librosa.resample(
-                            audio[:, ch],
-                            orig_sr=sr,
+                            af.audio[ch, :],
+                            orig_sr=original_sr,
                             target_sr=target_sr,
                             res_type="kaiser_best",
                         )
-                        for ch in range(audio.shape[1])
+                        for ch in range(af.audio.shape[0])
                     ]
                 )
             else:
                 # Mono - resample directly
-                audio = librosa.resample(
-                    audio, orig_sr=sr, target_sr=target_sr, res_type="kaiser_best"
+                af.audio = librosa.resample(
+                    af.audio,
+                    orig_sr=original_sr,
+                    target_sr=target_sr,
+                    res_type="kaiser_best",
                 )
-            sr = target_sr
 
         # Apply dithering
         if self.good_dither is not None:
-            self.logger.debug(f"Applying Goodhertz dither to {input_path.name}")
-            audio = self.apply_goodhertz_dither(audio, sr, target_bits)
+            self.logger.debug(f"Applying Goodhertz dither to {af.file_path.name}")
+            af.audio = self.apply_goodhertz_dither(af.audio, target_sr, target_bits)
         else:
-            self.logger.debug(f"Applying basic dither to {input_path.name}")
-            audio = self.apply_basic_dither(audio, target_bits)
+            self.logger.debug(f"Applying basic dither to {af.file_path.name}")
+            af.audio = self.apply_basic_dither(af.audio, target_bits)
 
-        # Write to temp file, delete original, rename
-        temp_file = input_path.with_suffix(".tmp.wav")
         subtype_map = {16: "PCM_16", 24: "PCM_24", 32: "PCM_32"}
-
-        self.logger.debug(f"Writing processed audio to temp file: {temp_file}")
-        sf.write(temp_file, audio, sr, subtype=subtype_map.get(target_bits, "PCM_24"))
-        input_path.unlink()
-        temp_file.rename(input_path)
+        af.write(target_sr, subtype_map.get(target_bits, "PCM_24"))
+        af.unload()
 
         self.logger.info(
-            f"Completed SRBD fix: {input_path.name}",
+            f"Completed SRBD fix: {af.file_path.name}",
             extra={
-                "filepath": input_path,
+                "filepath": af.file_path,
                 "original_sr": original_sr,
                 "new_sr": target_sr,
             },
@@ -116,7 +117,7 @@ class AudioProcessor:
 
     def apply_microfades(
         self,
-        input_path: Path,
+        af: AudioFile,
         fadein_samples: int = 35,
         fadeout_samples: int = 90,
     ) -> None:
@@ -129,58 +130,47 @@ class AudioProcessor:
             fadeout_samples: Number of samples for fade out (default: 90)
         """
         self.logger.info(
-            f"Starting microfade application: {input_path.name} (in={fadein_samples}, out={fadeout_samples})",
+            f"Starting microfade application: {af.file_path.name} (in={fadein_samples}, out={fadeout_samples})",
             extra={
-                "filepath": input_path,
+                "filepath": af,
                 "fadein_samples": fadein_samples,
                 "fadeout_samples": fadeout_samples,
             },
         )
 
-        # Load audio
-        audio, sr = sf.read(input_path, always_2d=False)
-        info = sf.info(input_path)
-        subtype = info.subtype
-        is_stereo = audio.ndim == 2
-        total_samples = len(audio)
+        af.load()
+        is_stereo = af.audio.ndim == 2
 
-        # Ensure fades don't exceed 25% of file length each
-        max_fade = total_samples // 4
-        fadein_samples = min(fadein_samples, max_fade)
-        fadeout_samples = min(fadeout_samples, max_fade)
         self.logger.debug(
             f"Applying fades: {fadein_samples}s in, {fadeout_samples} out"
         )
 
         # Apply fade in
         if fadein_samples > 0:
-            fade_in_curve = np.linspace(0, 1, fadein_samples)
+            fadein_curve = np.linspace(0, 1, fadein_samples)
             if is_stereo:
                 # Apply to both channels
-                audio[:fadein_samples] *= fade_in_curve[:, np.newaxis]
+                af.audio[:, :fadein_samples] *= fadein_curve
             else:
                 # Mono
-                audio[:fadein_samples] *= fade_in_curve
+                af.audio[:, :fadein_samples] *= fadein_curve
 
         # Apply fade out
         if fadeout_samples > 0:
-            fade_out_curve = np.linspace(1, 0, fadeout_samples)
+            fadeout_curve = np.linspace(1, 0, fadeout_samples)
             if is_stereo:
                 # Apply to both channels
-                audio[-fadeout_samples:] *= fade_out_curve[:, np.newaxis]
+                af.audio[:, -fadeout_samples:] *= fadeout_curve
             else:
                 # Mono
-                audio[-fadeout_samples:] *= fade_out_curve
+                af.audio[-fadeout_samples:] *= fadeout_curve
 
-        temp_file = input_path.with_suffix(".tmp.wav")
-        self.logger.debug(f"Writing processed audio to temp file: {temp_file}")
-        sf.write(temp_file, audio, sr, subtype=subtype)
-        input_path.unlink()
-        temp_file.rename(input_path)
+        af.write()
+        af.unload()
 
         self.logger.info(
-            f"Completed microfade application: {input_path.name}",
-            extra={"filepath": input_path},
+            f"Completed microfade application: {af.file_path.name}",
+            extra={"filepath": af.file_path},
         )
 
     def apply_goodhertz_dither(

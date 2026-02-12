@@ -26,22 +26,21 @@ class AudioData:
 
     def add_row(self, row: AudioDataRow) -> None:
         """Add a new row to the table."""
-        self._data[str(row.file.filename)] = row
+        self._data[str(row.file.file_path)] = row
 
     def get_row(self, file: str | Path | AudioFile) -> AudioDataRow | None:
         """Get a row by file path."""
         if isinstance(file, AudioFile):
-            path = str(file.filename)
+            return self._data.get(str(file.file_path), None)
+        elif isinstance(file, Path):
+            return self._data.get(str(file)) or self._data.get(file.name)
         else:
-            path = str(file)
-        return self._data.get(path)
-
-    def get_files(self) -> list[AudioFile]:
-        """Gets all the AudioFiles in the table."""
-        return self.get_col("file")
+            return self._data.get(str(file))
 
     def get_col(self, column: str):
         """Get values from the specified column for all rows."""
+        # TODO: unused as of now
+
         valid_fields = {f.name for f in fields(AudioDataRow)}
         if column not in valid_fields:
             raise ValueError(
@@ -55,8 +54,10 @@ class AudioData:
         Update an existing row with new values.
         Returns True if the row was found and updated, False otherwise.
         """
+        # TODO: unused as of now
+
         if isinstance(file, AudioFile):
-            key = str(file.filename)
+            key = str(file.file_path)
         else:
             key = str(file)
 
@@ -74,7 +75,7 @@ class AudioData:
         new_table = AudioData()
 
         for row in self._data.values():
-            if str(directory) in str(row.file.filename):
+            if str(directory) in str(row.file.file_path):
                 new_table.add_row(row)
 
         return new_table
@@ -85,7 +86,7 @@ class AudioData:
         Returns True if the row was found and deleted, False otherwise.
         """
         if isinstance(file, AudioFile):
-            key = str(file.filename)
+            key = str(file.file_path)
         else:
             key = str(file)
 
@@ -105,7 +106,7 @@ class AudioData:
     def __contains__(self, file: str | Path | AudioFile) -> bool:
         """Check if a file exists in the table."""
         if isinstance(file, AudioFile):
-            file = str(file.filename)
+            file = str(file.file_path)
         else:
             file = str(file)
         return str(file) in self._data

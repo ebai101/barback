@@ -6,9 +6,7 @@ from pathlib import Path
 import librosa
 import numpy as np
 import soundfile as sf
-from numpy.typing import NDArray
 
-from barback.audio_processor import AudioProcessor
 from barback.util.logger import get_logger
 from barback.util.types import LoopResponse
 
@@ -19,153 +17,104 @@ class AudioFileError(Exception):
 
 
 class AudioFile:
-    def __init__(self, filename: Path):
-        self.filename: Path = Path(filename)
+    def __init__(self, file_path: Path):
+        self.file_path: Path = Path(file_path)
         self.loaded: bool = False
         self.logger = get_logger()
-
-    @property
-    def duration(self) -> float:
-        return librosa.get_duration(path=self.filename)
-
-    @property
-    def sample_rate(self) -> float:
-        return librosa.get_samplerate(str(self.filename))
-
-    @property
-    def bit_depth(self) -> str:
-        return str(sf.info(self.filename).subtype)
 
     def load(self, sample_rate: float = 0, mono: bool = False) -> None:
         if self.loaded:
             self.logger.warning(
-                f"Attempted to load already loaded file: {self.filename}"
+                f"Attempted to load already loaded file: {self.file_path}"
             )
-            raise AudioFileError(f"Tried to load already loaded file {self.filename}")
+            return
+
         if sample_rate == 0:
             sample_rate = self.sample_rate
         try:
             self.logger.debug(
-                f"Loading audio file: {self.filename.name} (sr={sample_rate}, mono={mono}"
+                f"Loading audio file: {self.file_path.name} (sr={sample_rate}, mono={mono})"
             )
-            self.audio, sr = librosa.load(self.filename, sr=sample_rate, mono=mono)
+            self.audio, sr = librosa.load(self.file_path, sr=sample_rate, mono=mono)
         except Exception as e:
             self.logger.error(
-                f"Failed to load audio file: {self.filename.name}",
-                extra={"filepath": self.filename},
+                f"Failed to load audio file: {self.file_path.name}",
+                extra={"filepath": self.file_path},
                 exc_info=True,
             )
             raise AudioFileError(
-                f"Unexpected error loading file {self.filename}: {type(e).__name__}, {e}"
+                f"Unexpected error loading file {self.file_path}: {type(e).__name__}, {e}"
             )
         self.loaded = True
 
     def unload(self) -> None:
         if not self.loaded:
-            self.logger.warning(f"Attempted to unload non-loaded file: {self.filename}")
-            raise AudioFileError(
-                f"Tried to unload non-loaded audio file {self.filename}"
+            self.logger.warning(
+                f"Attempted to unload non-loaded file: {self.file_path}"
             )
-        self.logger.debug(f"Unloading audio file: {self.filename.name}")
+            return
+
+        self.logger.debug(f"Unloading audio file: {self.file_path.name}")
         del self.audio
         self.loaded = False
 
+    def write(self, sr: int = -1, subtype: str = "") -> None:
+        """Writes AudioFile.audio to AudioFile.file_path.
+
+        Args:
+            sr: Sample rate, defaults to the sample rate of the file on disk
+            subtype: Subtype string, defaults to the subtype of the file on disk
+        """
+        if not self.loaded:
+            self.logger.warning(
+                f"Attempted to write an unloaded audio file: {self.file_path}"
+            )
+            return
+
+        if sr == -1:
+            sr = int(self.sample_rate)
+        if subtype == "":
+            subtype = self.bit_depth
+
+        self.logger.debug(f"Writing audio file... {self.file_path}")
+
+        temp_file = self.file_path.with_suffix(".tmp.wav")
+        sf.write(temp_file, self.audio.T, sr, subtype=subtype)
+        self.file_path.unlink()
+        temp_file.rename(self.file_path)
+
+        self.logger.info(f"Wrote audio file {self.file_path}")
+
     def __str__(self) -> str:
-        return self.filename.name
+        return self.file_path.name
 
     @property
-    def zero_crossings(self) -> float:
-        if not self.loaded:
-            raise AudioFileError(f"{self.filename} is not loaded")
-        if not hasattr(self, "_zero_crossings"):
-            self._zero_crossings = float(
-                np.mean(np.abs(np.diff(np.sign(self.audio))) > 0)
-            )
-        return self._zero_crossings
+    def duration(self) -> float:
+        return librosa.get_duration(path=self.file_path)
 
     @property
-    def chroma(self) -> NDArray[np.float32]:
-        if not self.loaded:
-            raise AudioFileError(f"{self.filename} is not loaded")
-        if not hasattr(self, "_chroma"):
-            self._chroma = librosa.feature.chroma_cqt(y=self.audio, sr=self.sample_rate)
-        return self._chroma
+    def sample_rate(self) -> float:
+        return librosa.get_samplerate(str(self.file_path))
 
     @property
-    def spectral_contrast(self) -> NDArray[np.float32]:
-        if not self.loaded:
-            raise AudioFileError(f"{self.filename} is not loaded")
-        if not hasattr(self, "_spectral_contrast"):
-            self._spectral_contrast = librosa.feature.spectral_contrast(
-                y=self.audio, sr=self.sample_rate
-            )
-        return self._spectral_contrast
-
-    @property
-    def first_onset(self) -> int:
-        if not self.loaded:
-            raise AudioFileError(f"{self.filename} is not loaded")
-        if not hasattr(self, "_first_onset"):
-            self._first_onset = int(
-                librosa.onset.onset_detect(
-                    y=librosa.to_mono(self.audio), sr=self.sample_rate, units="samples"
-                )[0]
-            )
-        return self._first_onset
-
-    def weighted_similarity(self, target: "AudioFile") -> tuple[str, str, float]:
-        if not self.loaded:
-            raise AudioFileError(f"{self.filename} is not loaded")
-
-        # zero crossing
-        zcr_similarity = 1 - np.abs(self.zero_crossings - target.zero_crossings)
-
-        # chroma
-        chroma_min = min(self.chroma.shape[1], target.chroma.shape[1])
-        chroma_similarity = 1 - np.mean(
-            np.abs(self.chroma[:, :chroma_min] - target.chroma[:, :chroma_min])
-        )
-
-        # spectral contrast
-        spectral_min = min(
-            self.spectral_contrast.shape[1],
-            target.spectral_contrast.shape[1],
-        )
-        spectral_similarity = np.mean(
-            np.abs(
-                self.spectral_contrast[:, :spectral_min]
-                - target.spectral_contrast[:, :spectral_min]
-            )
-        )
-        normalized_spectral_similarity = 1 - spectral_similarity / np.max(
-            [
-                np.abs(self.spectral_contrast[:, :spectral_min]),
-                np.abs(target.spectral_contrast[:, :spectral_min]),
-            ]
-        )
-
-        result = (
-            float(zcr_similarity + chroma_similarity + normalized_spectral_similarity)
-            / 3
-        )
-
-        return self.filename.name, target.filename.name, result
+    def bit_depth(self) -> str:
+        return str(sf.info(self.file_path).subtype)
 
     # returns a boolean (loopable/not loopable) and an error message if no BPM is found
     def is_loop(self) -> LoopResponse:
         if not self.loaded:
-            raise AudioFileError(f"{self.filename} is not loaded")
+            raise AudioFileError(f"{self.file_path} is not loaded")
         # find bpm - return early if no valid bpm found
         bpm_regex = r"^(?:.*?_)?[A-Z]+[A-Z][a-zA-Z]*_(\d+)(?:_.*)?$"
-        bpm_match = re.match(bpm_regex, os.path.basename(self.filename))
+        bpm_match = re.match(bpm_regex, os.path.basename(self.file_path))
         if bpm_match:
             number = int(bpm_match.group(1))
             if 60 <= number <= 299:
                 bpm = number
             else:
-                return LoopResponse(self.filename, False, "bpm out of range")
+                return LoopResponse(self.file_path, False, "bpm out of range")
         else:
-            return LoopResponse(self.filename, False, "no bpm found")
+            return LoopResponse(self.file_path, False, "no bpm found")
 
         # calculate samples/bar (assuming 4 beats/bar) and number of bars
         bar_len_samples = self.sample_rate * ((60 / bpm) * 4.0)
@@ -179,10 +128,10 @@ class AudioFile:
         is_loopable = difference < 1.0
 
         if is_loopable:
-            return LoopResponse(self.filename, True, "yes", bpm, num_bars_rounded)
+            return LoopResponse(self.file_path, True, "yes", bpm, num_bars_rounded)
         else:
             return LoopResponse(
-                self.filename,
+                self.file_path,
                 False,
                 f"off by {difference:.2f} samples",
                 bpm,
@@ -191,7 +140,7 @@ class AudioFile:
 
     def get_start_end_zero_crossing(self, threshold: float = 0.02) -> str:
         if not self.loaded:
-            raise AudioFileError(f"{self.filename} is not loaded")
+            raise AudioFileError(f"{self.file_path} is not loaded")
         if len(self.audio.shape) > 1:
             start_non_zero = any(abs(s) > threshold for s in self.audio[0])
             end_non_zero = any(abs(s) > threshold for s in self.audio[-1])
@@ -210,7 +159,7 @@ class AudioFile:
 
     def get_start_end_silence(self) -> tuple[float, float]:
         if not self.loaded:
-            raise AudioFileError(f"{self.filename} is not loaded")
+            raise AudioFileError(f"{self.file_path} is not loaded")
         audio_mono = librosa.to_mono(self.audio)
         non_silent = librosa.effects._signal_to_frame_nonsilent(audio_mono, top_db=75)
 
@@ -226,10 +175,3 @@ class AudioFile:
             start, end = 0, len(audio_mono)
 
         return start, end
-
-    def fix_format(self, processor: "AudioProcessor") -> Path:
-        """
-        Automatically fix samplerate and bit depth issues.
-        Returns path to fixed file.
-        """
-        return processor.fix_srbd(self.filename, target_sr=44100, target_bits=24)
