@@ -16,7 +16,6 @@ def main() -> None:
     audio_dir = sys.argv[1]
     audio_path = Path(audio_dir)
 
-    # Validate directory exists
     if not audio_path.exists():
         logger.error(f"Directory does not exist: {audio_dir}")
         print(f"Error: Directory '{audio_dir}' does not exist")

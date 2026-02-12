@@ -61,7 +61,6 @@ class FixTypeDialog(ModalScreen[str | None]):
             if self.has_zc:
                 options_list.add_option(Option("Fix ZC (Microfades)", id="fix_zc"))
             options_list.add_option(Option("Apply All Fixes", id="fix_all"))
-            # options_list.add_option(Option("Cancel", id="cancel"))
 
             yield options_list
             yield Footer()

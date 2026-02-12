@@ -154,14 +154,9 @@ class Barback(App):
         If you want to show all files, remove the filter.
         """
         table = self.query_one("#table", AudioTable)
-
-        # Save current cursor position before clearing
         old_cursor_row = table.cursor_row if table.row_count > 0 else 0
-
-        # Clear existing rows
         table.clear()
 
-        # Define columns
         if not table.columns:
             table.add_column("Filename", key="filename")
             table.add_column("Duration", key="duration")
@@ -189,9 +184,7 @@ class Barback(App):
                 if self.state.search_query in row.file.file_path.name.lower()
             ]
 
-        # Populate table
         for row in rows_to_display:
-            # Format issue summary
             if row.issues:
                 issue_summary = summarize_issues(row.issues)
             else:
@@ -204,7 +197,6 @@ class Barback(App):
                     filename_display, self.state.search_query
                 )
 
-            # Add row to table
             table.add_row(
                 filename_display,
                 f"{row.duration:.2f}s" if row.duration else "—",
@@ -220,11 +212,9 @@ class Barback(App):
 
         # Restore cursor position, adjusting if needed
         if table.row_count > 0:
-            # If the old position is beyond the new row count, move to the last row
             new_cursor_row = min(old_cursor_row, table.row_count - 1)
             table.move_cursor(row=new_cursor_row)
 
-        # Update stats line (separate from info messages)
         total_files = len(self.state.audio_data)
         files_with_issues = sum(1 for row in self.state.audio_data if row.issues)
 
@@ -244,14 +234,12 @@ class Barback(App):
         if not query:
             return text
 
-        # Case-insensitive search but preserve original case
         lower_text = text.lower()
         start_idx = lower_text.find(query)
 
         if start_idx == -1:
             return text
 
-        # Build highlighted string
         before = text[:start_idx]
         match = text[start_idx : start_idx + len(query)]
         after = text[start_idx + len(query) :]
@@ -274,10 +262,9 @@ class Barback(App):
 
             filename = re.sub(r"\[.*?\]", "", filename_display)
 
-            # Search through audio_data to find the matching file by name
             for row in self.state.audio_data:
                 if row.file.file_path.name == filename:
-                    return row.file.file_path  # This is the full Path object
+                    return row.file.file_path
 
         except Exception as e:
             self.info(f"Error getting file path: {e}")
@@ -316,14 +303,14 @@ class Barback(App):
     def action_cursor_down(self) -> None:
         """Move cursor down in table."""
         if self.state.search_mode:
-            return  # Don't move cursor while typing
+            return
         table = self.query_one("#table", AudioTable)
         table.action_cursor_down()
 
     def action_cursor_up(self) -> None:
         """Move cursor up in table."""
         if self.state.search_mode:
-            return  # Don't move cursor while typing
+            return
         table = self.query_one("#table", AudioTable)
         table.action_cursor_up()
 
@@ -344,7 +331,6 @@ class Barback(App):
         self.state.search_mode = True
         self.state.search_query = ""
 
-        # Show and focus the search input
         search_input = self.query_one("#search", Input)
         search_input.value = ""
         search_input.focus()
@@ -362,11 +348,8 @@ class Barback(App):
         self.state.search_mode = False
         self.state.search_query = ""
 
-        # Refocus the table
         table = self.query_one("#table", AudioTable)
         table.focus()
-
-        # Refresh to remove filtering and highlighting
         self._refresh_table()
         self.info("Search cleared")
 
@@ -411,7 +394,7 @@ class Barback(App):
             self.info(f"No files with {issue_kind} issues")
             return
 
-        # Limit to 32 files to avoid overwhelming the system
+        # RX open file limit is 32 files
         MAX_FILES = 32
         if len(files) > MAX_FILES:
             files = files[:MAX_FILES]

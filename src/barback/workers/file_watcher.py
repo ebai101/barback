@@ -43,14 +43,10 @@ async def watch_files(app: BarbackProtocol, state: BarbackState) -> None:
             for change_type, path_str in changes:
                 path = Path(path_str)
 
-                # Skip non-wav and temp files
                 if not is_valid_wav(path):
                     continue
-
-                # Handle different change types
                 if change_type == Change.added:
                     await _handle_file_added(app, state, executor, path)
-
                 elif change_type == Change.deleted:
                     await _handle_file_deleted(app, state, path)
 

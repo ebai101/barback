@@ -59,7 +59,6 @@ class AudioProcessor:
             },
         )
 
-        # Load audio
         af.load()
         original_sr = af.sample_rate
         is_stereo = af.audio.ndim == 2
@@ -67,7 +66,6 @@ class AudioProcessor:
             f"Loaded {af.file_path.name}: {original_sr}Hz, shape={af.audio.shape}"
         )
 
-        # Resample if needed
         if af.sample_rate != target_sr:
             self.logger.debug(
                 f"Resampling {af.file_path.name}: {original_sr}Hz -> {target_sr}Hz"
@@ -149,20 +147,16 @@ class AudioProcessor:
         if fadein_samples > 0:
             fadein_curve = np.linspace(0, 1, fadein_samples)
             if is_stereo:
-                # Apply to both channels
                 af.audio[:, :fadein_samples] *= fadein_curve
             else:
-                # Mono
                 af.audio[:, :fadein_samples] *= fadein_curve
 
         # Apply fade out
         if fadeout_samples > 0:
             fadeout_curve = np.linspace(1, 0, fadeout_samples)
             if is_stereo:
-                # Apply to both channels
                 af.audio[:, -fadeout_samples:] *= fadeout_curve
             else:
-                # Mono
                 af.audio[-fadeout_samples:] *= fadeout_curve
 
         af.write()

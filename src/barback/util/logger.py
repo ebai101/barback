@@ -25,7 +25,6 @@ class BarbackLogger:
         self.logger = logging.getLogger("barback")
         self.logger.setLevel(logging.INFO)
 
-        # Prevent duplicate handlers
         if self.logger.handlers:
             return
 
@@ -51,7 +50,7 @@ class BarbackLogger:
         file_handler.setFormatter(formatter)
         self.logger.addHandler(file_handler)
 
-        # Optional: JSON structured log for machine parsing
+        # JSON structured log for machine parsing
         json_log = log_dir / "barback_structured.jsonl"
         json_handler = RotatingFileHandler(
             json_log, maxBytes=10 * 1024 * 1024, backupCount=5, encoding="utf-8"
@@ -84,7 +83,6 @@ class StructuredFormatter(logging.Formatter):
             "message": record.getMessage(),
         }
 
-        # Include exception info if present
         if record.exc_info:
             log_data["exception"] = self.formatException(record.exc_info)
 
@@ -99,7 +97,6 @@ class StructuredFormatter(logging.Formatter):
         return json.dumps(log_data)
 
 
-# Singleton instance
 _logger_instance = None
 
 

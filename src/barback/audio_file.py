@@ -100,11 +100,12 @@ class AudioFile:
     def bit_depth(self) -> str:
         return str(sf.info(self.file_path).subtype)
 
-    # returns a boolean (loopable/not loopable) and an error message if no BPM is found
+    # Returns a boolean (loopable/not loopable) and an error message if no BPM is found
     def is_loop(self) -> LoopResponse:
         if not self.loaded:
             raise AudioFileError(f"{self.file_path} is not loaded")
-        # find bpm - return early if no valid bpm found
+
+        # Find BPM - return early if no valid BPM found
         bpm_regex = r"^(?:.*?_)?[A-Z]+[A-Z][a-zA-Z]*_(\d+)(?:_.*)?$"
         bpm_match = re.match(bpm_regex, os.path.basename(self.file_path))
         if bpm_match:
@@ -116,13 +117,13 @@ class AudioFile:
         else:
             return LoopResponse(self.file_path, False, "no bpm found")
 
-        # calculate samples/bar (assuming 4 beats/bar) and number of bars
+        # Calculate samples/bar (assuming 4 beats/bar) and number of bars
         bar_len_samples = self.sample_rate * ((60 / bpm) * 4.0)
         total_samples = self.audio.shape[0]
         num_bars = total_samples / bar_len_samples
         num_bars_rounded = round(num_bars)  # ideal bar length
 
-        # check the file length against the expected value
+        # Check the file length against the expected value
         expected_samples = num_bars_rounded * bar_len_samples
         difference = abs(total_samples - expected_samples)
         is_loopable = difference < 1.0

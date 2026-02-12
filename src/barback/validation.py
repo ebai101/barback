@@ -54,7 +54,7 @@ def check_silence(af: AudioFile) -> List[Issue]:
     name = str(af.file_path)
     is_loop_like = "loop" in name.lower()
 
-    # start
+    # Check start
     if not is_loop_like and start >= 500:
         logger.debug(f"Silence: {af.file_path.name} - {start} samples at the start")
         issues.append(
@@ -66,7 +66,7 @@ def check_silence(af: AudioFile) -> List[Issue]:
             Issue("Silence", f"{start} samples at the start"),
         )
 
-    # end
+    # Check end
     if end >= 22050:
         logger.debug(f"Silence: {af.file_path.name} - {end} samples at the end")
         issues.append(
@@ -115,7 +115,6 @@ def check_loop(af: AudioFile) -> List[Issue]:
 
     # Non‑loop case: reclassify common messages into structured issues
     msg = resp.response
-
     if "bpm out of range" in msg:
         logger.debug(f"Loop: {af.file_path.name} - bpm out of range")
         issues.append(Issue("Loop", "does not loop (bpm out of range)"))

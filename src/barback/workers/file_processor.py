@@ -27,7 +27,6 @@ def get_valid_audio_files(dirname: Path) -> list[Path]:
         logger.warning(f"Attempted to scan non-directory: {dirname}")
         return []
 
-    # Restrict to .wav only for your 44.1/24-bit requirement
     files = [file.resolve() for file in dirname.rglob("*.wav") if file.is_file()]
     logger.info(f"Discovered {len(files)} .wav files in {dirname}")
     return files
@@ -72,7 +71,6 @@ def process_file_with_validation(filepath: Path) -> AudioDataRow | None:
             issues=issues,
         )
     except Exception as e:
-        # Return a row with error info
         logger.error(
             f"Failed to process file: {filepath.name}",
             extra={"filepath": filepath},
@@ -90,7 +88,6 @@ async def init_audio_data(app: BarbackProtocol, state: BarbackState) -> None:
     """
     Initial scan: discover all .wav files, validate them, and populate AudioData.
     """
-    # Create a local executor (not stored in state)
     logger = get_logger()
     executor = ThreadPoolExecutor(max_workers=cpu_count())
 
@@ -116,15 +113,12 @@ async def init_audio_data(app: BarbackProtocol, state: BarbackState) -> None:
             app.post_message(ProgressBarAdvance(1))
             return result
 
-        # Process all files in parallel
         tasks = [_process_one(f) for f in audio_files]
         rows = await asyncio.gather(*tasks)
 
-        # Populate the in-memory table
         for row in rows:
             state.audio_data.add_row(row)
 
-        # Count files with issues for user feedback
         files_with_issues = sum(1 for row in rows if row.issues)
         logger.info(
             f"Initial scan complete: {len(audio_files)} files indexed, {files_with_issues} with issues",
