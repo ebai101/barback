@@ -1,4 +1,5 @@
 import subprocess
+import threading
 from collections.abc import Generator
 from pathlib import Path
 from typing import Any
@@ -9,6 +10,7 @@ from textual.containers import Container
 from textual.coordinate import Coordinate
 from textual.widgets import Footer, Header, Input, ProgressBar, Rule, Static
 
+from barback.audio_file import AudioFile
 from barback.audio_processor import AudioProcessor
 from barback.state import BarbackState
 from barback.util.logger import get_logger
@@ -285,7 +287,7 @@ class Barback(App):
 
         return None
 
-    def _get_audiofiles_with_issue_kind(self, issue_kind: str) -> list[Path]:
+    def _get_audiofiles_with_issue_kind(self, issue_kind: str) -> list[AudioFile]:
         """Get all files that have issues of the specified kind."""
         files = []
         for row in self.state.audio_data:
@@ -359,6 +361,71 @@ class Barback(App):
     # Actions - Open in External Apps
     # -------------------------------------------------------------------------
 
+    def _run_subprocess(
+        self,
+        command: list[str],
+        operation: str,
+        filepath: Path | None = None,
+    ) -> None:
+        """
+        Run a subprocess command and redirect stdout/stderr to the logger.
+
+        Args:
+            command: Command list (e.g., ["open", "-a", "RX", "/path/to/file"])
+            operation: Short description for logging (e.g., "open_in_rx")
+            filepath: Optional file path for logging context
+        """
+        try:
+            proc = subprocess.Popen(
+                command,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+
+            def log_stream(stream, level):
+                """Read from stream and log each line."""
+                for line in iter(stream.readline, ""):
+                    if line:
+                        line = line.rstrip()
+                        if level == "stdout":
+                            self.logger.debug(
+                                f"[{operation}] {line}",
+                                extra={"filepath": filepath, "operation": operation},
+                            )
+                        else:
+                            self.logger.warning(
+                                f"[{operation}] {line}",
+                                extra={"filepath": filepath, "operation": operation},
+                            )
+                stream.close()
+
+            # Start threads to consume stdout/stderr
+            stdout_thread = threading.Thread(
+                target=log_stream, args=(proc.stdout, "stdout"), daemon=True
+            )
+            stderr_thread = threading.Thread(
+                target=log_stream, args=(proc.stderr, "stderr"), daemon=True
+            )
+
+            stdout_thread.start()
+            stderr_thread.start()
+
+            # Don't block - let process run in background
+            # (the threads will continue logging until streams close)
+
+        except Exception:
+            self.logger.error(
+                f"Failed to start subprocess: {operation}",
+                extra={
+                    "filepath": filepath,
+                    "operation": operation,
+                    "command": command,
+                },
+                exc_info=True,
+            )
+            raise
+
     def action_open_in_rx(self) -> None:
         """Open the selected file in iZotope RX."""
         file_path = self._get_selected_file_path()
@@ -370,10 +437,10 @@ class Barback(App):
             self.logger.info(
                 f"Opening file in RX: {file_path.name}", extra={"filepath": file_path}
             )
-            subprocess.Popen(
+            self._run_subprocess(
                 ["open", "-a", "iZotope RX 11 Audio Editor", str(file_path)],
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
+                "open_in_rx",
+                file_path,
             )
             self.info(f"Opening {file_path.name} in RX")
         except Exception as e:
@@ -421,8 +488,10 @@ class Barback(App):
             self.info(f"Opening {len(files)} {issue_kind} issues in RX")
 
         try:
-            subprocess.Popen(
-                ["open", "-a", "iZotope RX 11 Audio Editor"] + [str(f) for f in files],
+            self._run_subprocess(
+                ["open", "-a", "iZotope RX 11 Audio Editor"]
+                + [f.file_path for f in files],
+                "open_all_in_rx",
             )
         except Exception as e:
             self.info(f"Error opening RX: {e}")
@@ -439,10 +508,10 @@ class Barback(App):
                 f"Opening file in Myriad: {file_path.name}",
                 extra={"filepath": file_path},
             )
-            subprocess.Popen(
+            self._run_subprocess(
                 ["open", "-a", "Myriad", str(file_path)],
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
+                "open_in_myriad",
+                file_path,
             )
             self.info(f"Opening {file_path.name} in Myriad")
         except Exception as e:
@@ -472,10 +541,9 @@ class Barback(App):
         self.info(f"Opening {len(files)} {issue_kind} issues in Myriad")
 
         try:
-            subprocess.Popen(
-                ["open", "-a", "Myriad"] + [str(f) for f in files],
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
+            self._run_subprocess(
+                ["open", "-a", "Myriad"] + [f.file_path for f in files],
+                "open_all_in_myriad",
             )
         except Exception as e:
             self.info(f"Error opening Myriad: {e}")
@@ -492,10 +560,8 @@ class Barback(App):
                 f"Revealing file in Finder: {file_path.name}",
                 extra={"filepath": file_path},
             )
-            subprocess.Popen(
-                ["open", "-R", str(file_path)],
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
+            self._run_subprocess(
+                ["open", "-R", str(file_path)], "reveal_in_finder", file_path
             )
             self.info(f"Revealing {file_path.name} in Finder")
         except Exception as e:
