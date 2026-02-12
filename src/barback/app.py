@@ -48,27 +48,37 @@ class Barback(App):
             "Toggle All/Issues",
             tooltip="Switch between viewing all files and only those with issues",
         ),
-        Binding("x", "open_in_rx", "RX", tooltip="Open selected file in RX"),
+        Binding("1", "open_in_rx", "RX", tooltip="Open selected file in RX"),
         Binding(
-            "X",
+            "!",
             "open_all_issue_type_in_rx",
-            "RX All",
+            "RX (All files with issue)",
             tooltip="Open all files with a specific issue in RX",
+            show=False,
         ),
         Binding(
-            "m",
+            "2",
             "open_in_myriad",
             "Myriad",
             tooltip="Open selected file in Myriad",
         ),
         Binding(
-            "M",
+            "@",
             "open_all_issue_type_in_myriad",
-            "Myriad All",
+            "Myriad (All files with issue)",
             tooltip="Open all files with a specific issue in Myriad",
+            show=False,
         ),
-        Binding("r", "fix_selected", "Fix", tooltip="Apply fixes to the selected file"),
-        Binding("R", "fix_all_issues", "Fix All", tooltip="Apply fixes to all files"),
+        Binding(
+            "r", "fix_selected", "Repair", tooltip="Apply fixes to the selected file"
+        ),
+        Binding(
+            "R",
+            "fix_all_issues",
+            "Repair All",
+            tooltip="Apply fixes to all files",
+            show=False,
+        ),
         Binding(
             "f", "reveal_in_finder", "Reveal", tooltip="Reveal selected file in Finder"
         ),
