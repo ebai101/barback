@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 import re
 from typing import Iterable, List
 
@@ -140,8 +139,7 @@ def check_tonal_loop_key_signature(af: AudioFile) -> List[Issue]:
     logger = get_logger()
     issues: List[Issue] = []
 
-    basename = os.path.basename(str(af.file_path))
-    lowercase_name = basename.lower()
+    basename = af.file_path.name
 
     # First: multiple key signatures anywhere
     key_sig_matches = _KEY_SIG_REGEX.findall(basename)
@@ -150,11 +148,13 @@ def check_tonal_loop_key_signature(af: AudioFile) -> List[Issue]:
         issues.append(Issue("Key sig", "multiple key signatures"))
         # Still continue; filename format may also be wrong.
 
-    # Only enforce for loops that are not clearly drums/percussion
-    if "loop" not in lowercase_name:
+    if "loop" not in af.file_path.name:
         return issues
 
-    if not any(s in lowercase_name for s in ("drum", "perc", "hihat")):
+    # Only enforce for loops that are not clearly drums/percussion
+    if not any(
+        s in str(af.file_path).lower() for s in ("drum", "perc", "hihat", "top")
+    ):
         if not _KEY_SIG_AT_END_REGEX.match(basename):
             logger.debug(
                 f"Key sig: {af.file_path.name} - does not have a key signature but is a tonal loop"
