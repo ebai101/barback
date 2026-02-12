@@ -7,6 +7,7 @@ requires-python = ">=3.12, <3.13"
 dependencies = [
   "librosa>=0.11.0",
   "pedalboard>=0.9.22",
+  "sounddevice>=0.5.5",
   "textual>=0.85.1",
   "watchfiles>=0.24.0",
 ]

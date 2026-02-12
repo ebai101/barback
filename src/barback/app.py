@@ -23,6 +23,7 @@ from barback.util.messages import (
 from barback.validation import summarize_issues
 from barback.widgets.audio_table import AudioTable
 from barback.widgets.fix_dialog import FixTypeDialog
+from barback.widgets.playback_dialog import PlaybackDialog
 from barback.workers.audio_fixer import (
     fix_all_issues_all_files,
     fix_all_issues_selected_file,
@@ -39,6 +40,7 @@ from barback.workers.file_watcher import watch_files
 
 class Barback(App):
     CSS_PATH = "barback.tcss"
+    COMMAND_PALETTE_BINDING = "ctrl+backslash"
     BINDINGS = [
         Binding(
             "a",
@@ -158,6 +160,10 @@ class Barback(App):
         """Sort table by the selected column."""
         table = event.data_table
         table.sort(event.column_key)
+
+    def on_data_table_row_selected(self, event: AudioTable.RowSelected) -> None:
+        """Handle Enter key on table row - open playback dialog."""
+        self.action_playback_rename()
 
     def on_input_changed(self, event: Input.Changed) -> None:
         """Handle search input changes."""
@@ -297,7 +303,7 @@ class Barback(App):
                     return row.file.file_path
 
         except Exception as e:
-            self.info(f"Error getting file path: {e}")
+            self.notify(f"Error getting file path: {e}", severity="error")
 
         return None
 
@@ -382,6 +388,60 @@ class Barback(App):
         table.focus()
         self._refresh_table()
         self.info("Search cleared")
+
+    def action_playback_rename(self) -> None:
+        """Open playback/rename dialog for the selected file."""
+        file_path = self._get_selected_file_path()
+        if not file_path:
+            self.info("No file selected")
+            return
+
+        def handle_rename_result(result: tuple[bool, str] | None) -> None:
+            """Handle the result from the playback dialog."""
+            if result is None:
+                self.info("Playback cancelled")
+                return
+
+            changed, new_name = result
+
+            if changed:
+                try:
+                    # Construct new path
+                    new_path = file_path.parent / f"{new_name}{file_path.suffix}"
+
+                    # Check if target already exists
+                    if new_path.exists():
+                        self.info(f"File already exists: {new_path.name}")
+                        self.logger.warning(
+                            f"Rename cancelled - target exists: {new_path.name}",
+                            extra={"filepath": file_path, "target": new_path},
+                        )
+                        return
+
+                    # Perform rename
+                    file_path.rename(new_path)
+
+                    self.logger.info(
+                        f"Renamed file: {file_path.name} -> {new_path.name}",
+                        extra={"old_path": file_path, "new_path": new_path},
+                    )
+                    self.info(f"Renamed: {file_path.name} → {new_path.name}")
+
+                    # Update state
+                    # The file watcher should handle table updates automatically
+
+                except Exception as e:
+                    self.logger.error(
+                        f"Failed to rename file: {file_path.name}",
+                        extra={"filepath": file_path},
+                        exc_info=True,
+                    )
+                    self.notify(f"Error renaming file: {e}", severity="error")
+            else:
+                self.info("File not renamed")
+
+        # Show the playback dialog
+        self.push_screen(PlaybackDialog(file_path), handle_rename_result)
 
     # -------------------------------------------------------------------------
     # Actions - Open in External Apps
@@ -475,7 +535,7 @@ class Barback(App):
                 extra={"filepath": file_path},
                 exc_info=True,
             )
-            self.info(f"Error opening RX: {e}")
+            self.notify(f"Error opening RX: {e}", severity="error")
 
     def action_open_all_issue_type_in_rx(self) -> None:
         """Open all files with the same issue type in iZotope RX."""
@@ -520,7 +580,7 @@ class Barback(App):
                 "open_all_in_rx",
             )
         except Exception as e:
-            self.info(f"Error opening RX: {e}")
+            self.notify(f"Error opening RX: {e}", severity="error")
 
     def action_open_in_myriad(self) -> None:
         """Open the selected file in Myriad."""
@@ -546,7 +606,7 @@ class Barback(App):
                 extra={"filepath": file_path},
                 exc_info=True,
             )
-            self.info(f"Error opening Myriad: {e}")
+            self.notify(f"Error opening Myriad: {e}", severity="error")
 
     def action_open_all_issue_type_in_myriad(self) -> None:
         """Open all files with the same issue type in Myriad."""
@@ -572,7 +632,7 @@ class Barback(App):
                 "open_all_in_myriad",
             )
         except Exception as e:
-            self.info(f"Error opening Myriad: {e}")
+            self.notify(f"Error opening Myriad: {e}", severity="error")
 
     def action_reveal_in_finder(self) -> None:
         """Reveal the selected file in Finder."""
@@ -596,7 +656,7 @@ class Barback(App):
                 extra={"filepath": file_path},
                 exc_info=True,
             )
-            self.info(f"Error revealing in Finder: {e}")
+            self.notify(f"Error revealing in Finder: {e}", severity="error")
 
     # -------------------------------------------------------------------------
     # Actions - Audio Processor

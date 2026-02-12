@@ -71,3 +71,64 @@ FixTypeDialog {
     margin-top: 1;
     text-style: italic;
 }
+
+PlaybackDialog {
+    align: center middle;
+}
+
+#playback_dialog {
+    width: 70;
+    height: auto;
+    background: $surface;
+    border: thick $primary;
+    padding: 1 2;
+}
+
+#playback_title {
+    text-align: center;
+    text-style: bold;
+    color: $primary;
+    content-align: center middle;
+    height: 1;
+    margin-bottom: 1;
+}
+
+#playback_controls {
+    height: auto;
+    width: 100%;
+    align: center middle;
+    margin-bottom: 1;
+}
+
+#playback_controls Button {
+    min-width: 20;
+    margin: 0 1;
+}
+
+#position_display {
+    text-align: center;
+    color: $text;
+    height: 1;
+    margin-top: 1;
+    margin-bottom: 0;
+}
+
+#position_bar {
+    width: 100%;
+    align: center middle;
+    margin-bottom: 1;
+}
+
+#rename_label {
+    text-style: bold;
+    color: $text;
+    height: 1;
+    margin-top: 1;
+    margin-bottom: 0;
+}
+
+#rename_input {
+    width: 100%;
+    margin-top: 0;
+    margin-bottom: 1;
+}
