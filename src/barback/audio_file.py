@@ -100,7 +100,6 @@ class AudioFile:
     def bit_depth(self) -> str:
         return str(sf.info(self.file_path).subtype)
 
-    # Returns a boolean (loopable/not loopable) and an error message if no BPM is found
     def is_loop(self) -> LoopResponse:
         if not self.loaded:
             raise AudioFileError(f"{self.file_path} is not loaded")
@@ -119,25 +118,42 @@ class AudioFile:
 
         # Calculate samples/bar (assuming 4 beats/bar) and number of bars
         bar_len_samples = self.sample_rate * ((60 / bpm) * 4.0)
-        total_samples = self.audio.shape[0]
-        num_bars = total_samples / bar_len_samples
-        num_bars_rounded = round(num_bars)  # ideal bar length
+        total_samples = int(self.audio.shape[-1])
 
-        # Check the file length against the expected value
+        num_bars = total_samples / bar_len_samples
+        num_bars_rounded = round(num_bars)
+
         expected_samples = num_bars_rounded * bar_len_samples
-        difference = abs(total_samples - expected_samples)
-        is_loopable = difference < 1.0
+        target_samples = int(round(expected_samples))
+
+        float_diff = abs(total_samples - expected_samples)
+
+        is_loopable = float_diff < 1.0
 
         if is_loopable:
-            return LoopResponse(self.file_path, True, "yes", bpm, num_bars_rounded)
-        else:
             return LoopResponse(
                 self.file_path,
-                False,
-                f"off by {difference:.2f} samples",
+                True,
+                "yes",
                 bpm,
                 num_bars_rounded,
+                bar_len_samples=bar_len_samples,
+                expected_samples=expected_samples,
+                target_samples=target_samples,
+                sample_diff=float_diff,
             )
+
+        return LoopResponse(
+            self.file_path,
+            False,
+            f"off by {float_diff:.2f} samples",
+            bpm,
+            num_bars_rounded,
+            bar_len_samples=bar_len_samples,
+            expected_samples=expected_samples,
+            target_samples=target_samples,
+            sample_diff=float_diff,
+        )
 
     def get_start_end_zero_crossing(self, threshold: float = 0.02) -> str:
         if not self.loaded:

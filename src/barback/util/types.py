@@ -18,3 +18,7 @@ class LoopResponse:
     response: str
     bpm: int | None = None
     num_bars: int | None = None
+    bar_len_samples: float | None = None
+    expected_samples: float | None = None
+    target_samples: int | None = None
+    sample_diff: float | None = None

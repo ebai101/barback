@@ -24,6 +24,8 @@ from barback.widgets.fix_dialog import FixTypeDialog
 from barback.workers.audio_fixer import (
     fix_all_issues_all_files,
     fix_all_issues_selected_file,
+    fix_loop_all_files,
+    fix_loop_selected_file,
     fix_srbd_all_files,
     fix_srbd_selected_file,
     fix_zc_all_files,
@@ -522,6 +524,7 @@ class Barback(App):
 
         has_srbd = any(i.kind == "SR/BD" for i in (row.issues or []))
         has_zc = any(i.kind == "ZC" for i in (row.issues or []))
+        has_loop = any(i.kind == "Loop" for i in (row.issues or []))
         file_name = file_path.name
         af = row.file
 
@@ -542,6 +545,12 @@ class Barback(App):
                     return
                 fix_zc_selected_file(self, self.state, self.audio_processor, af)
 
+            elif fix_type == "fix_loop":
+                if not has_loop:
+                    self.info("Selected file has no Loop issues")
+                    return
+                fix_loop_selected_file(self, self.state, self.audio_processor, af)
+
             elif fix_type == "fix_all":
                 fix_all_issues_selected_file(self, self.state, self.audio_processor, af)
 
@@ -554,6 +563,9 @@ class Barback(App):
                 case "ZC":
                     handle_fix_selection("fix_zc")
                     return
+                case "Loop":
+                    handle_fix_selection("fix_loop")
+                    return
 
         # Otherwise show the dialog
         self.push_screen(
@@ -563,6 +575,7 @@ class Barback(App):
                 file_count=1,
                 has_srbd=has_srbd,
                 has_zc=has_zc,
+                has_loop=has_loop,
             ),
             handle_fix_selection,
         )
@@ -572,6 +585,7 @@ class Barback(App):
 
         srbd_files = self._get_audiofiles_with_issue_kind("SR/BD")
         zc_files = self._get_audiofiles_with_issue_kind("ZC")
+        loop_files = self._get_audiofiles_with_issue_kind("Loop")
 
         if self.state.show_all_files:
             all_files = [row.file for row in self.state.audio_data]
@@ -584,6 +598,7 @@ class Barback(App):
 
         has_srbd = len(srbd_files) > 0
         has_zc = len(zc_files) > 0
+        has_loop = len(loop_files) > 0
 
         def handle_fix_selection(fix_type: str | None) -> None:
             if fix_type is None:
@@ -602,6 +617,12 @@ class Barback(App):
                     return
                 fix_zc_all_files(self, self.state, self.audio_processor, zc_files)
 
+            elif fix_type == "fix_loop":
+                if not loop_files:
+                    self.info("No Loop issues found")
+                    return
+                fix_loop_all_files(self, self.state, self.audio_processor, loop_files)
+
             elif fix_type == "fix_all":
                 fix_all_issues_all_files(
                     self, self.state, self.audio_processor, all_files
@@ -609,7 +630,11 @@ class Barback(App):
 
         self.push_screen(
             FixTypeDialog(
-                is_all=True, file_count=len(all_files), has_srbd=has_srbd, has_zc=has_zc
+                is_all=True,
+                file_count=len(all_files),
+                has_srbd=has_srbd,
+                has_zc=has_zc,
+                has_loop=has_loop,
             ),
             handle_fix_selection,
         )

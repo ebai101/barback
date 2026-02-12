@@ -230,6 +230,130 @@ async def fix_zc_all_files(
 
 
 # =============================================================================
+# Loop Fix Functions
+# =============================================================================
+
+
+def _fix_loop_single_file(
+    processor: AudioProcessor,
+    af: AudioFile,
+    fadeout_samples: int = 90,
+) -> tuple[AudioFile, bool, str]:
+    """
+    Fix a single file's loop length (trim/pad + fade out).
+    Returns (af, success, note_or_error).
+
+    success=False only on exception.
+    If success=True and note_or_error != "", it was intentionally skipped.
+    """
+    logger = get_logger()
+    start_time = time.time()
+
+    logger.info(
+        f"Starting Loop fix for: {af.file_path.name}",
+        extra={"filepath": af, "operation": "fix_loop"},
+    )
+    try:
+        note = processor.fix_loop(af, fadeout_samples=fadeout_samples)
+        duration = (time.time() - start_time) * 1000
+
+        if note:
+            logger.info(
+                note,
+                extra={"filepath": af, "operation": "fix_loop", "duration": duration},
+            )
+        else:
+            logger.info(
+                f"Successfully fixed Loop for: {af.file_path.name} in {duration:.2f}ms",
+                extra={"filepath": af, "operation": "fix_loop", "duration": duration},
+            )
+
+        return (af, True, note)
+
+    except Exception as e:
+        duration = (time.time() - start_time) * 1000
+        logger.error(
+            f"Failed to fix Loop for: {af.file_path.name} after {duration:.2f}ms",
+            extra={"filepath": af, "operation": "fix_loop", "duration": duration},
+            exc_info=True,
+        )
+        return (af, False, str(e))
+
+
+@work
+async def fix_loop_selected_file(
+    app: BarbackProtocol,
+    state: BarbackState,
+    processor: AudioProcessor,
+    af: AudioFile,
+) -> None:
+    """Async worker to fix Loop for a single selected file."""
+    executor = ThreadPoolExecutor(max_workers=1)
+    try:
+        app.info(f"Fixing Loop for {af.file_path.name}...")
+        loop = asyncio.get_event_loop()
+        result_af, success, note = await loop.run_in_executor(
+            executor,
+            _fix_loop_single_file,
+            processor,
+            af,
+        )
+
+        if success:
+            if note:
+                app.info(note)
+            else:
+                app.info(f"Fixed Loop: {result_af.file_path.name}")
+        else:
+            app.info(f"Error fixing Loop for {result_af.file_path.name}: {note}")
+    finally:
+        executor.shutdown(wait=True)
+
+
+@work
+async def fix_loop_all_files(
+    app: BarbackProtocol,
+    state: BarbackState,
+    processor: AudioProcessor,
+    afiles: list[AudioFile],
+) -> None:
+    """Async worker to fix Loop for multiple files with progress tracking."""
+    executor = ThreadPoolExecutor(max_workers=cpu_count())
+    try:
+        total = len(afiles)
+        app.post_message(ProgressBarUpdate(total, 0))
+        app.info(f"Fixing Loop for {total} files...")
+
+        async def fix_one(af: AudioFile) -> tuple[AudioFile, bool, str]:
+            loop = asyncio.get_event_loop()
+            result = await loop.run_in_executor(
+                executor,
+                _fix_loop_single_file,
+                processor,
+                af,
+            )
+            app.post_message(ProgressBarAdvance(1))
+            return result
+
+        tasks = [fix_one(f) for f in afiles]
+        results = await asyncio.gather(*tasks)
+
+        failed = sum(1 for (_, success, _) in results if not success)
+        skipped = sum(1 for (_, success, note) in results if success and note)
+        fixed = total - failed - skipped
+
+        if failed > 0:
+            app.info(
+                f"Loop fix: {fixed}/{total} fixed ({skipped} skipped, {failed} failed)"
+            )
+        else:
+            app.info(f"Loop fix: {fixed}/{total} fixed ({skipped} skipped)")
+
+    finally:
+        executor.shutdown(wait=True)
+
+
+# =============================================================================
 # Combined Fix Functions (SRBD + Microfades)
 # =============================================================================
 
@@ -238,13 +362,10 @@ def _fix_all_issues_single_file(
     processor: AudioProcessor,
     af: AudioFile,
 ) -> tuple[AudioFile, bool, str]:
-    """
-    Apply all possible fixes to a single file (SRBD + microfades).
-    Returns (filepath, success, error_message).
-    """
     try:
         processor.fix_srbd(af)
         processor.apply_microfades(af)
+        processor.fix_loop(af)
         return (af, True, "")
     except Exception as e:
         return (af, False, str(e))

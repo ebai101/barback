@@ -25,6 +25,7 @@ class FixTypeDialog(ModalScreen[str | None]):
         file_count: int = 1,
         has_srbd: bool = False,
         has_zc: bool = False,
+        has_loop: bool = False,
     ) -> None:
         """
         Initialize the fix type dialog.
@@ -41,6 +42,7 @@ class FixTypeDialog(ModalScreen[str | None]):
         self.file_count = file_count
         self.has_srbd = has_srbd
         self.has_zc = has_zc
+        self.has_loop = has_loop
 
     def compose(self) -> ComposeResult:
         """Build the dialog UI."""
@@ -60,6 +62,8 @@ class FixTypeDialog(ModalScreen[str | None]):
                 options_list.add_option(Option("Fix SR/BD", id="fix_srbd"))
             if self.has_zc:
                 options_list.add_option(Option("Fix ZC (Microfades)", id="fix_zc"))
+            if self.has_loop:
+                options_list.add_option(Option("Fix Loop", id="fix_loop"))
             options_list.add_option(Option("Apply All Fixes", id="fix_all"))
 
             yield options_list

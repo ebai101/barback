@@ -95,10 +95,10 @@ class AudioProcessor:
         # Apply dithering
         if self.good_dither is not None:
             self.logger.debug(f"Applying Goodhertz dither to {af.file_path.name}")
-            af.audio = self.apply_goodhertz_dither(af.audio, target_sr, target_bits)
+            af.audio = self._apply_goodhertz_dither(af.audio, target_sr, target_bits)
         else:
             self.logger.debug(f"Applying basic dither to {af.file_path.name}")
-            af.audio = self.apply_basic_dither(af.audio, target_bits)
+            af.audio = self._apply_basic_dither(af.audio, target_bits)
 
         subtype_map = {16: "PCM_16", 24: "PCM_24", 32: "PCM_32"}
         af.write(target_sr, subtype_map.get(target_bits, "PCM_24"))
@@ -167,7 +167,7 @@ class AudioProcessor:
             extra={"filepath": af.file_path},
         )
 
-    def apply_goodhertz_dither(
+    def _apply_goodhertz_dither(
         self, audio: np.ndarray, sr: int, target_bits: int
     ) -> np.ndarray:
         """
@@ -178,7 +178,7 @@ class AudioProcessor:
         processed = board(audio, sample_rate=sr)
         return processed
 
-    def apply_basic_dither(self, audio: np.ndarray, target_bits: int) -> np.ndarray:
+    def _apply_basic_dither(self, audio: np.ndarray, target_bits: int) -> np.ndarray:
         """
         Fallback TPDF (Triangular PDF) dithering.
         Works with both mono and stereo.
@@ -192,3 +192,81 @@ class AudioProcessor:
         dithered = audio + dither
         quantized = np.round(dithered / q_step) * q_step
         return np.clip(quantized, -1.0, 1.0)
+
+    def _apply_fade_out(self, audio: np.ndarray, fadeout_samples: int) -> np.ndarray:
+        if fadeout_samples <= 0:
+            return audio
+
+        n = int(audio.shape[-1])
+        n_fade = min(fadeout_samples, n)
+        if n_fade <= 0:
+            return audio
+
+        curve = np.linspace(1.0, 0.0, n_fade, dtype=audio.dtype)
+        audio[..., -n_fade:] *= curve
+        return audio
+
+    def _pad_to_length(self, audio: np.ndarray, target_samples: int) -> np.ndarray:
+        current = int(audio.shape[-1])
+        pad = target_samples - current
+        if pad <= 0:
+            return audio
+
+        if audio.ndim == 1:
+            return np.pad(audio, (0, pad), mode="constant")
+        return np.pad(audio, ((0, 0), (0, pad)), mode="constant")
+
+    def fix_loop(self, af: AudioFile, fadeout_samples: int = 90) -> str:
+        """
+        Fix small loop length errors by trimming or padding to the nearest integer
+        target length (derived from BPM + rounded bars).
+
+        Returns:
+            "" if a fix was applied and written,
+            otherwise a non-empty string describing why it was skipped.
+        """
+        self.logger.info(
+            f"Starting loop fix: {af.file_path.name}",
+            extra={"filepath": af, "operation": "fix_loop"},
+        )
+
+        af.load()
+        try:
+            resp = af.is_loop()
+
+            if (
+                resp.bpm is None
+                or resp.bar_len_samples is None
+                or resp.target_samples is None
+            ):
+                return f"Skipped loop fix for {af.file_path.name}: {resp.response}"
+
+            current_samples = int(af.audio.shape[-1])
+            target_samples = int(resp.target_samples)
+
+            beat_len_samples = float(resp.bar_len_samples) * 0.25
+            diff_samples = abs(current_samples - target_samples)
+
+            if diff_samples >= beat_len_samples:
+                return (
+                    f"Skipped loop fix for {af.file_path.name}: "
+                    f"off by {diff_samples:.0f} samples (>= 1 beat)"
+                )
+
+            if current_samples == target_samples:
+                return f"Skipped loop fix for {af.file_path.name}: already at target length"
+
+            if current_samples > target_samples:
+                # Too long: truncate excess samples, then fade out
+                af.audio = af.audio[..., :target_samples]
+                af.audio = self._apply_fade_out(af.audio, fadeout_samples)
+            else:
+                # Too short: fade out first, then pad with silence
+                af.audio = self._apply_fade_out(af.audio, fadeout_samples)
+                af.audio = self._pad_to_length(af.audio, target_samples)
+
+            af.write()
+            return ""
+
+        finally:
+            af.unload()
