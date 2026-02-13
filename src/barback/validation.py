@@ -15,12 +15,12 @@ def check_format_sr_bd(af: AudioFile) -> List[Issue]:
 
     ext = af.file_path.suffix.lower()
     if ext != ".wav":
-        logger.debug(f"SRBD: {af.file_path.name} - Not a WAV file ({ext})")
+        logger.debug(f"SR/BD: {af.file_path.name} - Not a WAV file ({ext})")
         issues.append(Issue("SR/BD", "not a wav file"))
 
     if af.sample_rate != 44100:
         logger.debug(
-            f"SRBD: {af.file_path.name} - Incorrect sample rate ({af.sample_rate}Hz)"
+            f"SR/BD: {af.file_path.name} - Incorrect sample rate ({af.sample_rate}Hz)"
         )
         issues.append(
             Issue(
@@ -31,7 +31,7 @@ def check_format_sr_bd(af: AudioFile) -> List[Issue]:
 
     if af.bit_depth != "PCM_24":
         logger.debug(
-            f"SRBD: {af.file_path.name} - Incorrect bit depth ({af.bit_depth})"
+            f"SR/BD: {af.file_path.name} - Incorrect bit depth ({af.bit_depth})"
         )
         issues.append(
             Issue(

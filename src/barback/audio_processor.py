@@ -51,7 +51,7 @@ class AudioProcessor:
             target_bits: Target bit depth (default: 24)
         """
         self.logger.info(
-            f"Starting SRBD fix: {af.file_path.name} -> {target_sr}Hz, {target_bits}bit",
+            f"Starting SR/BD fix: {af.file_path.name} -> {target_sr}Hz, {target_bits}bit",
             extra={
                 "filepath": af,
                 "target_sr": target_sr,
@@ -105,7 +105,7 @@ class AudioProcessor:
         af.unload()
 
         self.logger.info(
-            f"Completed SRBD fix: {af.file_path.name}",
+            f"Completed SR/BD fix: {af.file_path.name}",
             extra={
                 "filepath": af.file_path,
                 "original_sr": original_sr,

@@ -13,7 +13,7 @@ from barback.util.messages import ProgressBarAdvance, ProgressBarUpdate
 from barback.util.protocol import BarbackProtocol
 
 # =============================================================================
-# SRBD Fix Functions
+# SR/BD Fix Functions
 # =============================================================================
 
 
@@ -28,21 +28,21 @@ def _fix_srbd_single_file(
     start_time = time.time()
 
     logger.info(
-        f"Starting SRBD fix for: {af.file_path.name}",
+        f"Starting SR/BD fix for: {af.file_path.name}",
         extra={"filepath": af, "operation": "fix_srbd"},
     )
     try:
         processor.fix_srbd(af)
         duration = (time.time() - start_time) * 1000
         logger.info(
-            f"Successfully fixed SRBD for: {af.file_path.name} in {duration:.2f}ms",
+            f"Successfully fixed SR/BD for: {af.file_path.name} in {duration:.2f}ms",
             extra={"filepath": af, "operation": "fix_srbd", "duration": duration},
         )
         return (af, True, "")
     except Exception as e:
         duration = (time.time() - start_time) * 1000
         logger.error(
-            f"Failed to fix SRBD for: {af.file_path.name} after {duration:.2f}ms",
+            f"Failed to fix SR/BD for: {af.file_path.name} after {duration:.2f}ms",
             extra={"filepath": af, "operation": "fix_srbd", "duration": duration},
             exc_info=True,
         )
@@ -56,10 +56,10 @@ async def fix_srbd_selected_file(
     processor: AudioProcessor,
     af: AudioFile,
 ) -> None:
-    """Async worker to fix SRBD for a single selected file."""
+    """Async worker to fix SR/BD for a single selected file."""
     executor = ThreadPoolExecutor(max_workers=1)
     try:
-        app.info(f"Fixing SRBD for {af.file_path.name}...")
+        app.info(f"Fixing SR/BD for {af.file_path.name}...")
         loop = asyncio.get_event_loop()
         result_af, success, error = await loop.run_in_executor(
             executor,
@@ -69,9 +69,9 @@ async def fix_srbd_selected_file(
         )
 
         if success:
-            app.info(f"Fixed SRBD: {result_af.file_path.name}")
+            app.info(f"Fixed SR/BD: {result_af.file_path.name}")
         else:
-            app.info(f"Error fixing SRBD for {result_af.file_path.name}: {error}")
+            app.info(f"Error fixing SR/BD for {result_af.file_path.name}: {error}")
     finally:
         executor.shutdown(wait=True)
 
@@ -83,12 +83,12 @@ async def fix_srbd_all_files(
     processor: AudioProcessor,
     afiles: list[AudioFile],
 ) -> None:
-    """Async worker to fix SRBD for multiple files with progress tracking."""
+    """Async worker to fix SR/BD for multiple files with progress tracking."""
     executor = ThreadPoolExecutor(max_workers=cpu_count())
     try:
         total = len(afiles)
         app.post_message(ProgressBarUpdate(total, 0))
-        app.info(f"Fixing SRBD for {total} files...")
+        app.info(f"Fixing SR/BD for {total} files...")
 
         async def fix_one(af: AudioFile) -> tuple[AudioFile, bool, str]:
             """Async wrapper for fixing one file."""
@@ -110,10 +110,10 @@ async def fix_srbd_all_files(
 
         if failure_count > 0:
             app.info(
-                f"Fixed SRBD for {success_count}/{total} files ({failure_count} failed)"
+                f"Fixed SR/BD for {success_count}/{total} files ({failure_count} failed)"
             )
         else:
-            app.info(f"Fixed SRBD for {total} files successfully")
+            app.info(f"Fixed SR/BD for {total} files successfully")
     finally:
         executor.shutdown(wait=True)
 
@@ -354,7 +354,7 @@ async def fix_loop_all_files(
 
 
 # =============================================================================
-# Combined Fix Functions (SRBD + Microfades)
+# Combined Fix Functions (SR/BD + Microfades)
 # =============================================================================
 
 

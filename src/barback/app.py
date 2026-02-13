@@ -22,7 +22,7 @@ from barback.util.messages import (
 )
 from barback.validation import summarize_issues
 from barback.widgets.audio_table import AudioTable
-from barback.widgets.fix_dialog import FixTypeDialog
+from barback.widgets.fix_dialog import FixTypeDialog, IssueTypeSelectionDialog
 from barback.widgets.playback_dialog import PlaybackDialog
 from barback.workers.audio_fixer import (
     fix_all_issues_all_files,
@@ -507,9 +507,6 @@ class Barback(App):
             stdout_thread.start()
             stderr_thread.start()
 
-            # Don't block - let process run in background
-            # (the threads will continue logging until streams close)
-
         except Exception:
             self.logger.error(
                 f"Failed to start subprocess: {operation}",
@@ -548,49 +545,95 @@ class Barback(App):
             self.notify(f"Error opening RX: {e}", severity="error")
 
     def action_open_all_issue_type_in_rx(self) -> None:
-        """Open all files with the same issue type in iZotope RX."""
-        issue_kind = self._get_selected_issue_kind()
-        if not issue_kind:
-            self.info("No issue selected")
+        """Show dialog to select issue type, then open all matching files in RX."""
+        # Get counts for each issue type
+        srbd_files = self._get_audiofiles_with_issue_kind("SR/BD")
+        zc_files = self._get_audiofiles_with_issue_kind("ZC")
+        loop_files = self._get_audiofiles_with_issue_kind("Loop")
+
+        has_srbd = len(srbd_files) > 0
+        has_zc = len(zc_files) > 0
+        has_loop = len(loop_files) > 0
+
+        if not (has_srbd or has_zc or has_loop):
+            self.info("No files with issues found")
             return
 
-        files = self._get_audiofiles_with_issue_kind(issue_kind)
-        if not files:
-            self.info(f"No files with {issue_kind} issues")
-            return
+        # Build info text
+        issue_counts = []
+        if has_srbd:
+            issue_counts.append(f"{len(srbd_files)} SR/BD")
+        if has_zc:
+            issue_counts.append(f"{len(zc_files)} ZC")
+        if has_loop:
+            issue_counts.append(f"{len(loop_files)} Loop")
+        info_text = f"Available: {', '.join(issue_counts)}"
 
-        # RX open file limit is 32 files
-        MAX_FILES = 32
-        if len(files) > MAX_FILES:
-            files = files[:MAX_FILES]
-            self.logger.warning(
-                f"Opening {MAX_FILES}/{len(self._get_audiofiles_with_issue_kind(issue_kind))} files in RX (limit reached)",
-                extra={
-                    "issue_kind": issue_kind,
-                    "total_files": len(
-                        self._get_audiofiles_with_issue_kind(issue_kind)
-                    ),
-                },
-            )
-            self.info(
-                f"Opening first {MAX_FILES} {issue_kind} issues in RX "
-                f"({len(self._get_audiofiles_with_issue_kind(issue_kind))} total)"
-            )
-        else:
-            self.logger.info(
-                f"Opening {len(files)} {issue_kind} files in RX",
-                extra={"issue_kind": issue_kind, "file_count": len(files)},
-            )
-            self.info(f"Opening {len(files)} {issue_kind} issues in RX")
+        def handle_selection(action: str | None) -> None:
+            if action is None:
+                self.info("Cancelled")
+                return
 
-        try:
-            self._run_subprocess(
-                ["open", "-a", "iZotope RX 11 Audio Editor"]
-                + [f.file_path for f in files],
-                "open_all_in_rx",
-            )
-        except Exception as e:
-            self.notify(f"Error opening RX: {e}", severity="error")
+            # Map action to issue kind and files
+            issue_map = {
+                "open_srbd": ("SR/BD", srbd_files),
+                "open_zc": ("ZC", zc_files),
+                "open_loop": ("Loop", loop_files),
+            }
+
+            if action not in issue_map:
+                return
+
+            issue_kind, files = issue_map[action]
+
+            if not files:
+                self.info(f"No {issue_kind} issues found")
+                return
+
+            # RX file limit
+            MAX_FILES = 32
+            if len(files) > MAX_FILES:
+                files = files[:MAX_FILES]
+                self.logger.warning(
+                    f"Opening {MAX_FILES}/{len(self._get_audiofiles_with_issue_kind(issue_kind))} files in RX (limit reached)",
+                    extra={
+                        "issue_kind": issue_kind,
+                        "total_files": len(
+                            self._get_audiofiles_with_issue_kind(issue_kind)
+                        ),
+                    },
+                )
+                self.info(
+                    f"Opening first {MAX_FILES} {issue_kind} issues in RX ({len(self._get_audiofiles_with_issue_kind(issue_kind))} total)"
+                )
+            else:
+                self.logger.info(
+                    f"Opening {len(files)} {issue_kind} files in RX",
+                    extra={"issue_kind": issue_kind, "file_count": len(files)},
+                )
+                self.info(f"Opening {len(files)} {issue_kind} issues in RX")
+
+            try:
+                self._run_subprocess(
+                    ["open", "-a", "iZotope RX 11 Audio Editor"]
+                    + [f.file_path for f in files],
+                    "open_all_in_rx",
+                )
+            except Exception as e:
+                self.notify(f"Error opening RX: {e}", severity="error")
+
+        # Show the dialog
+        self.push_screen(
+            IssueTypeSelectionDialog(
+                title="Open in RX - Select Issue Type",
+                info=info_text,
+                has_srbd=has_srbd,
+                has_zc=has_zc,
+                has_loop=has_loop,
+                action_prefix="open",
+            ),
+            handle_selection,
+        )
 
     def action_open_in_myriad(self) -> None:
         """Open the selected file in Myriad."""
@@ -619,30 +662,77 @@ class Barback(App):
             self.notify(f"Error opening Myriad: {e}", severity="error")
 
     def action_open_all_issue_type_in_myriad(self) -> None:
-        """Open all files with the same issue type in Myriad."""
-        issue_kind = self._get_selected_issue_kind()
-        if not issue_kind:
-            self.info("No issue selected")
+        """Show dialog to select issue type, then open all matching files in Myriad."""
+        # Get counts for each issue type
+        srbd_files = self._get_audiofiles_with_issue_kind("SR/BD")
+        zc_files = self._get_audiofiles_with_issue_kind("ZC")
+        loop_files = self._get_audiofiles_with_issue_kind("Loop")
+
+        has_srbd = len(srbd_files) > 0
+        has_zc = len(zc_files) > 0
+        has_loop = len(loop_files) > 0
+
+        if not (has_srbd or has_zc or has_loop):
+            self.info("No files with issues found")
             return
 
-        files = self._get_audiofiles_with_issue_kind(issue_kind)
-        if not files:
-            self.info(f"No files with {issue_kind} issues")
-            return
+        # Build info text
+        issue_counts = []
+        if has_srbd:
+            issue_counts.append(f"{len(srbd_files)} SR/BD")
+        if has_zc:
+            issue_counts.append(f"{len(zc_files)} ZC")
+        if has_loop:
+            issue_counts.append(f"{len(loop_files)} Loop")
+        info_text = f"Available: {', '.join(issue_counts)}"
 
-        self.logger.info(
-            f"Opening {len(files)} {issue_kind} files in Myriad",
-            extra={"issue_kind": issue_kind, "file_count": len(files)},
-        )
-        self.info(f"Opening {len(files)} {issue_kind} issues in Myriad")
+        def handle_selection(action: str | None) -> None:
+            if action is None:
+                self.info("Cancelled")
+                return
 
-        try:
-            self._run_subprocess(
-                ["open", "-a", "Myriad"] + [f.file_path for f in files],
-                "open_all_in_myriad",
+            # Map action to issue kind and files
+            issue_map = {
+                "open_srbd": ("SR/BD", srbd_files),
+                "open_zc": ("ZC", zc_files),
+                "open_loop": ("Loop", loop_files),
+            }
+
+            if action not in issue_map:
+                return
+
+            issue_kind, files = issue_map[action]
+
+            if not files:
+                self.info(f"No {issue_kind} issues found")
+                return
+
+            self.logger.info(
+                f"Opening {len(files)} {issue_kind} files in Myriad",
+                extra={"issue_kind": issue_kind, "file_count": len(files)},
             )
-        except Exception as e:
-            self.notify(f"Error opening Myriad: {e}", severity="error")
+            self.info(f"Opening {len(files)} {issue_kind} issues in Myriad")
+
+            try:
+                self._run_subprocess(
+                    ["open", "-a", "Myriad"] + [f.file_path for f in files],
+                    "open_all_in_myriad",
+                )
+            except Exception as e:
+                self.notify(f"Error opening Myriad: {e}", severity="error")
+
+        # Show the dialog
+        self.push_screen(
+            IssueTypeSelectionDialog(
+                title="Open in Myriad - Select Issue Type",
+                info=info_text,
+                has_srbd=has_srbd,
+                has_zc=has_zc,
+                has_loop=has_loop,
+                action_prefix="open",
+            ),
+            handle_selection,
+        )
 
     def action_reveal_in_finder(self) -> None:
         """Reveal the selected file in Finder."""

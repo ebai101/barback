@@ -17,7 +17,7 @@
     display: none;
 }
 
-FixTypeDialog {
+IssueTypeSelectionDialog {
     align: center middle;
 }
 
