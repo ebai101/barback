@@ -32,6 +32,15 @@ class AudioProcessor:
                 try:
                     plugin = load_plugin(str(path))
                     self.logger.info(f"Loaded Goodhertz Good Dither from: {path}")
+
+                    plugin.auto_blanking = True  # ty:ignore[unresolved-attribute]
+                    plugin.bit_depth = "24 Bit"  # ty:ignore[unresolved-attribute]
+                    plugin.bypass = False  # ty:ignore[unresolved-attribute]
+                    plugin.dither_amount = "Optimal"  # ty:ignore[unresolved-attribute]
+                    plugin.master_on_off = True  # ty:ignore[unresolved-attribute]
+                    plugin.noise_shaping = "Optimal"  # ty:ignore[unresolved-attribute]
+                    self.logger.info("Successfully configured Goodhertz Good Dither")
+
                     return plugin
                 except Exception as e:
                     self.logger.warning(f"Failed to load plugin from {path}: {e}")
