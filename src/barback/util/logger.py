@@ -3,13 +3,12 @@ import logging
 from datetime import datetime
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
-from typing import Optional
 
 
 class BarbackLogger:
     """Centralized logging for Barback with structured output."""
 
-    _instance: Optional["BarbackLogger"] = None
+    _instance: "BarbackLogger | None" = None
     _initialized: bool = False
 
     def __new__(cls):
@@ -23,7 +22,6 @@ class BarbackLogger:
 
         self._initialized = True
         self.logger = logging.getLogger("barback")
-        self.logger.setLevel(logging.INFO)
 
         if self.logger.handlers:
             return
@@ -40,7 +38,6 @@ class BarbackLogger:
             backupCount=5,
             encoding="utf-8",
         )
-        file_handler.setLevel(logging.DEBUG)
 
         # Detailed formatter with timestamp, level, and context
         formatter = logging.Formatter(
@@ -49,15 +46,6 @@ class BarbackLogger:
         )
         file_handler.setFormatter(formatter)
         self.logger.addHandler(file_handler)
-
-        # JSON structured log for machine parsing
-        json_log = log_dir / "barback_structured.jsonl"
-        json_handler = RotatingFileHandler(
-            json_log, maxBytes=10 * 1024 * 1024, backupCount=5, encoding="utf-8"
-        )
-        json_handler.setLevel(logging.INFO)
-        json_handler.setFormatter(StructuredFormatter())
-        self.logger.addHandler(json_handler)
 
         self.logger.info("=" * 80)
         self.logger.info(f"Barback logging initialized - logs at: {log_dir}")

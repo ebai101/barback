@@ -17,9 +17,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [dependency-groups]
-dev = [
-    "textual-dev>=1.8.0",
-]
+dev = ["textual-dev>=1.8.0"]
 
 [project.scripts]
 barback = "barback:main"

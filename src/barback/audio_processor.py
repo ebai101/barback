@@ -9,11 +9,11 @@ from barback.util.logger import get_logger
 
 
 class AudioProcessor:
-    def __init__(self):
+    def __init__(self, good_dither_path: str | None = None):
         self.logger = get_logger()
-        self.good_dither = self.load_goodhertz_plugin()
+        self.good_dither = self.load_goodhertz_plugin(good_dither_path)
 
-    def load_goodhertz_plugin(self):
+    def load_goodhertz_plugin(self, provided_path: str | None):
         """Locate and load Goodhertz Good Dither plugin."""
         self.logger.info("Attempting to load Goodhertz Good Dither plugin")
 
@@ -23,6 +23,9 @@ class AudioProcessor:
             "/Library/Audio/Plug-Ins/Components/Ghz Good Dither 3.component",
             "~/Library/Audio/Plug-Ins/Components/Ghz Good Dither 3.component",
         ]
+        if provided_path:
+            possible_paths.insert(0, provided_path)
+
         for path_str in possible_paths:
             path = Path(path_str).expanduser()
             if path.exists():

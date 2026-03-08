@@ -2,11 +2,15 @@ import sys
 from pathlib import Path
 
 from barback.app import Barback
+from barback.config import get_config
 from barback.util.logger import get_logger
 
 
 def main() -> None:
     logger = get_logger()
+    config = get_config()
+
+    logger.setLevel(config.get_log_level())
 
     if len(sys.argv) != 2:
         logger.error("Invalid arguments - missing audio directory")

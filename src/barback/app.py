@@ -8,10 +8,12 @@ from textual.app import App
 from textual.binding import Binding
 from textual.containers import Container
 from textual.coordinate import Coordinate
+from textual.events import Key
 from textual.widgets import Footer, Header, Input, ProgressBar, Rule, Static
 
 from barback.audio_file import AudioFile
 from barback.audio_processor import AudioProcessor
+from barback.config import get_config
 from barback.state import BarbackState
 from barback.util.logger import get_logger
 from barback.util.messages import (
@@ -41,33 +43,13 @@ from barback.workers.file_watcher import watch_files
 class Barback(App):
     CSS_PATH = "barback.tcss"
     COMMAND_PALETTE_BINDING = "ctrl+backslash"
+
     BINDINGS = [
         Binding(
             "a",
             "toggle_show_all",
             "Toggle All/Issues",
             tooltip="Switch between viewing all files and only those with issues",
-        ),
-        Binding("1", "open_in_rx", "RX", tooltip="Open selected file in RX"),
-        Binding(
-            "!",
-            "open_all_issue_type_in_rx",
-            "RX (All files with issue)",
-            tooltip="Open all files with a specific issue in RX",
-            show=False,
-        ),
-        Binding(
-            "2",
-            "open_in_myriad",
-            "Myriad",
-            tooltip="Open selected file in Myriad",
-        ),
-        Binding(
-            "@",
-            "open_all_issue_type_in_myriad",
-            "Myriad (All files with issue)",
-            tooltip="Open all files with a specific issue in Myriad",
-            show=False,
         ),
         Binding(
             "r", "fix_selected", "Repair", tooltip="Apply fixes to the selected file"
@@ -94,13 +76,185 @@ class Barback(App):
 
     def __init__(self, audio_dir: str) -> None:
         super().__init__()
+        self.config = get_config()
         self.state = BarbackState(
             audio_dir=Path(audio_dir),
             selected_dir=Path(audio_dir),
         )
-        self.audio_processor = AudioProcessor()
+        self.audio_processor = AudioProcessor(
+            good_dither_path=self.config.good_dither_path
+        )
         self.logger = get_logger()
         self.logger.info(f"Barback initialized with directory: {audio_dir}")
+
+        self._setup_dynamic_bindings()
+        self._register_dynamic_actions()
+
+    def _setup_dynamic_bindings(self) -> None:
+        """Setup bindings dynamically from config."""
+        for b in self.config.generate_app_bindings():
+            self._bindings._add_binding(b)
+        self.refresh_bindings()
+
+    def _register_dynamic_actions(self) -> None:
+        """Dynamically create action methods for each configured app."""
+        for idx, app in enumerate(self.config.apps, start=1):
+            if idx > 10:
+                break
+            action_base = app.display_name.lower().replace(" ", "_")
+            self._create_open_action(
+                app.display_name, app.application_name, action_base
+            )
+            self._create_open_all_action(
+                app.display_name, app.application_name, action_base
+            )
+
+    def _create_open_action(
+        self, display_name: str, app_name: str, action_base: str
+    ) -> None:
+        """Create an action method for opening selected file in an app."""
+
+        def action_method(self_inner: "Barback") -> None:
+            file_path = self_inner._get_selected_file_path()
+            if not file_path:
+                self_inner.info("No file selected")
+                return
+
+            try:
+                self_inner.logger.info(
+                    f"Opening file in {display_name}: {file_path.name}",
+                    extra={"filepath": file_path},
+                )
+                self_inner._run_subprocess(
+                    ["open", "-a", app_name, str(file_path)],
+                    f"open_in_{action_base}",
+                    file_path,
+                )
+                self_inner.info(f"Opening {file_path.name} in {display_name}")
+            except Exception as e:
+                self_inner.logger.error(
+                    f"Failed to open file in {display_name}: {file_path.name}",
+                    extra={"filepath": file_path},
+                    exc_info=True,
+                )
+                self_inner.notify(
+                    f"Error opening {display_name}: {e}", severity="error"
+                )
+
+        method_name = f"action_open_in_{action_base}"
+        setattr(self.__class__, method_name, action_method)
+        self.logger.info(f"Bound action {method_name}")
+
+    def _create_open_all_action(
+        self, display_name: str, app_name: str, action_base: str
+    ) -> None:
+        """Create an action method for opening all files with issue type in an app."""
+
+        def action_method(self_inner: "Barback") -> None:
+            srbd_files = self_inner._get_audiofiles_with_issue_kind("SR/BD")
+            zc_files = self_inner._get_audiofiles_with_issue_kind("ZC")
+            loop_files = self_inner._get_audiofiles_with_issue_kind("Loop")
+
+            has_srbd = len(srbd_files) > 0
+            has_zc = len(zc_files) > 0
+            has_loop = len(loop_files) > 0
+
+            if not (has_srbd or has_zc or has_loop):
+                self_inner.info("No issues found")
+                return
+
+            # Build info text
+            issue_counts = []
+            if has_srbd:
+                issue_counts.append(f"{len(srbd_files)} SR/BD")
+            if has_zc:
+                issue_counts.append(f"{len(zc_files)} ZC")
+            if has_loop:
+                issue_counts.append(f"{len(loop_files)} Loop")
+            info_text = f"Available: {', '.join(issue_counts)}"
+
+            def handle_selection(action: str | None) -> None:
+                if action is None:
+                    self_inner.info("Cancelled")
+                    return
+
+                issue_map = {
+                    "open_srbd": ("SR/BD", srbd_files),
+                    "open_zc": ("ZC", zc_files),
+                    "open_loop": ("Loop", loop_files),
+                }
+
+                if action not in issue_map:
+                    return
+
+                issue_kind, files = issue_map[action]
+                if not files:
+                    self_inner.info(f"No {issue_kind} issues found")
+                    return
+
+                app_config = next(
+                    (
+                        app
+                        for app in self_inner.config.apps
+                        if app.application_name == app_name
+                    ),
+                    None,
+                )
+                if not app_config:
+                    self_inner.notify(f"App {app_name} not found!", severity="error")
+                    return
+
+                self.logger.info(app_config)
+                if app_config.max_files and len(files) > app_config.max_files:
+                    files = files[: app_config.max_files]
+                    self_inner.logger.warning(
+                        f"Opening {app_config.max_files}/{len(self_inner._get_audiofiles_with_issue_kind(issue_kind))} files in {display_name}",
+                        extra={
+                            "issue_kind": issue_kind,
+                            "total_files": len(
+                                self_inner._get_audiofiles_with_issue_kind(issue_kind)
+                            ),
+                        },
+                    )
+                    self_inner.info(
+                        f"Opening first {app_config.max_files} {issue_kind} issues in {display_name} ({len(self_inner._get_audiofiles_with_issue_kind(issue_kind))} total)"
+                    )
+                else:
+                    self_inner.logger.info(
+                        f"Opening {len(files)} {issue_kind} files in {display_name}",
+                        extra={"issue_kind": issue_kind, "file_count": len(files)},
+                    )
+                    self_inner.info(
+                        f"Opening {len(files)} {issue_kind} issues in {display_name}"
+                    )
+
+                try:
+                    self_inner._run_subprocess(
+                        ["open", "-a", app_name] + [str(f.file_path) for f in files],
+                        f"open_all_in_{action_base}",
+                    )
+                except Exception as e:
+                    self_inner.notify(
+                        f"Error opening {display_name}: {e}", severity="error"
+                    )
+
+            # Show dialog
+            self_inner.push_screen(
+                IssueTypeSelectionDialog(
+                    title=f"Open in {display_name} - Select Issue Type",
+                    info=info_text,
+                    has_srbd=has_srbd,
+                    has_zc=has_zc,
+                    has_loop=has_loop,
+                    action_prefix="open",
+                ),
+                handle_selection,
+            )
+
+        # Bind the method to the class
+        method_name = f"action_open_all_in_{action_base}"
+        setattr(self.__class__, method_name, action_method)
+        self.logger.info(f"Bound action {method_name}")
 
     def compose(self) -> Generator[Any, Any, None]:
         """Build the UI layout."""
@@ -123,10 +277,8 @@ class Barback(App):
 
     def on_mount(self) -> None:
         """Called when app mounts - kick off the workers."""
-        self.theme = "tokyo-night"
         self.info("Starting Barback...")
-
-        # Start the initial scan
+        self.theme = self.config.theme
         init_audio_data(self, self.state)
 
     def info(self, text: str) -> None:
@@ -187,6 +339,9 @@ class Barback(App):
             table = self.query_one("#table", AudioTable)
             table.focus()
             self.info(f"Search: {self.state.search_query or '(empty)'}")
+
+    def on_key(self, event: Key) -> None:
+        self.logger.debug(event.key)
 
     # -------------------------------------------------------------------------
     # Table Management
@@ -343,7 +498,7 @@ class Barback(App):
         return files
 
     # -------------------------------------------------------------------------
-    # Actions - Basic Navigation
+    # Actions
     # -------------------------------------------------------------------------
 
     def action_cursor_down(self) -> None:
@@ -453,10 +608,6 @@ class Barback(App):
         # Show the playback dialog
         self.push_screen(PlaybackDialog(file_path), handle_rename_result)
 
-    # -------------------------------------------------------------------------
-    # Actions - Open in External Apps
-    # -------------------------------------------------------------------------
-
     def _run_subprocess(
         self,
         command: list[str],
@@ -518,249 +669,6 @@ class Barback(App):
                 exc_info=True,
             )
             raise
-
-    def action_open_in_rx(self) -> None:
-        """Open the selected file in iZotope RX."""
-        file_path = self._get_selected_file_path()
-        if not file_path:
-            self.info("No file selected")
-            return
-
-        try:
-            self.logger.info(
-                f"Opening file in RX: {file_path.name}", extra={"filepath": file_path}
-            )
-            self._run_subprocess(
-                ["open", "-a", "iZotope RX 11 Audio Editor", str(file_path)],
-                "open_in_rx",
-                file_path,
-            )
-            self.info(f"Opening {file_path.name} in RX")
-        except Exception as e:
-            self.logger.error(
-                f"Failed to open file in RX: {file_path.name}",
-                extra={"filepath": file_path},
-                exc_info=True,
-            )
-            self.notify(f"Error opening RX: {e}", severity="error")
-
-    def action_open_all_issue_type_in_rx(self) -> None:
-        """Show dialog to select issue type, then open all matching files in RX."""
-        # Get counts for each issue type
-        srbd_files = self._get_audiofiles_with_issue_kind("SR/BD")
-        zc_files = self._get_audiofiles_with_issue_kind("ZC")
-        loop_files = self._get_audiofiles_with_issue_kind("Loop")
-
-        has_srbd = len(srbd_files) > 0
-        has_zc = len(zc_files) > 0
-        has_loop = len(loop_files) > 0
-
-        if not (has_srbd or has_zc or has_loop):
-            self.info("No files with issues found")
-            return
-
-        # Build info text
-        issue_counts = []
-        if has_srbd:
-            issue_counts.append(f"{len(srbd_files)} SR/BD")
-        if has_zc:
-            issue_counts.append(f"{len(zc_files)} ZC")
-        if has_loop:
-            issue_counts.append(f"{len(loop_files)} Loop")
-        info_text = f"Available: {', '.join(issue_counts)}"
-
-        def handle_selection(action: str | None) -> None:
-            if action is None:
-                self.info("Cancelled")
-                return
-
-            # Map action to issue kind and files
-            issue_map = {
-                "open_srbd": ("SR/BD", srbd_files),
-                "open_zc": ("ZC", zc_files),
-                "open_loop": ("Loop", loop_files),
-            }
-
-            if action not in issue_map:
-                return
-
-            issue_kind, files = issue_map[action]
-
-            if not files:
-                self.info(f"No {issue_kind} issues found")
-                return
-
-            # RX file limit
-            MAX_FILES = 32
-            if len(files) > MAX_FILES:
-                files = files[:MAX_FILES]
-                self.logger.warning(
-                    f"Opening {MAX_FILES}/{len(self._get_audiofiles_with_issue_kind(issue_kind))} files in RX (limit reached)",
-                    extra={
-                        "issue_kind": issue_kind,
-                        "total_files": len(
-                            self._get_audiofiles_with_issue_kind(issue_kind)
-                        ),
-                    },
-                )
-                self.info(
-                    f"Opening first {MAX_FILES} {issue_kind} issues in RX ({len(self._get_audiofiles_with_issue_kind(issue_kind))} total)"
-                )
-            else:
-                self.logger.info(
-                    f"Opening {len(files)} {issue_kind} files in RX",
-                    extra={"issue_kind": issue_kind, "file_count": len(files)},
-                )
-                self.info(f"Opening {len(files)} {issue_kind} issues in RX")
-
-            try:
-                self._run_subprocess(
-                    ["open", "-a", "iZotope RX 11 Audio Editor"]
-                    + [f.file_path for f in files],
-                    "open_all_in_rx",
-                )
-            except Exception as e:
-                self.notify(f"Error opening RX: {e}", severity="error")
-
-        # Show the dialog
-        self.push_screen(
-            IssueTypeSelectionDialog(
-                title="Open in RX - Select Issue Type",
-                info=info_text,
-                has_srbd=has_srbd,
-                has_zc=has_zc,
-                has_loop=has_loop,
-                action_prefix="open",
-            ),
-            handle_selection,
-        )
-
-    def action_open_in_myriad(self) -> None:
-        """Open the selected file in Myriad."""
-        file_path = self._get_selected_file_path()
-        if not file_path:
-            self.info("No file selected")
-            return
-
-        try:
-            self.logger.info(
-                f"Opening file in Myriad: {file_path.name}",
-                extra={"filepath": file_path},
-            )
-            self._run_subprocess(
-                ["open", "-a", "Myriad", str(file_path)],
-                "open_in_myriad",
-                file_path,
-            )
-            self.info(f"Opening {file_path.name} in Myriad")
-        except Exception as e:
-            self.logger.error(
-                f"Failed to open file in Myriad: {file_path.name}",
-                extra={"filepath": file_path},
-                exc_info=True,
-            )
-            self.notify(f"Error opening Myriad: {e}", severity="error")
-
-    def action_open_all_issue_type_in_myriad(self) -> None:
-        """Show dialog to select issue type, then open all matching files in Myriad."""
-        # Get counts for each issue type
-        srbd_files = self._get_audiofiles_with_issue_kind("SR/BD")
-        zc_files = self._get_audiofiles_with_issue_kind("ZC")
-        loop_files = self._get_audiofiles_with_issue_kind("Loop")
-
-        has_srbd = len(srbd_files) > 0
-        has_zc = len(zc_files) > 0
-        has_loop = len(loop_files) > 0
-
-        if not (has_srbd or has_zc or has_loop):
-            self.info("No files with issues found")
-            return
-
-        # Build info text
-        issue_counts = []
-        if has_srbd:
-            issue_counts.append(f"{len(srbd_files)} SR/BD")
-        if has_zc:
-            issue_counts.append(f"{len(zc_files)} ZC")
-        if has_loop:
-            issue_counts.append(f"{len(loop_files)} Loop")
-        info_text = f"Available: {', '.join(issue_counts)}"
-
-        def handle_selection(action: str | None) -> None:
-            if action is None:
-                self.info("Cancelled")
-                return
-
-            # Map action to issue kind and files
-            issue_map = {
-                "open_srbd": ("SR/BD", srbd_files),
-                "open_zc": ("ZC", zc_files),
-                "open_loop": ("Loop", loop_files),
-            }
-
-            if action not in issue_map:
-                return
-
-            issue_kind, files = issue_map[action]
-
-            if not files:
-                self.info(f"No {issue_kind} issues found")
-                return
-
-            self.logger.info(
-                f"Opening {len(files)} {issue_kind} files in Myriad",
-                extra={"issue_kind": issue_kind, "file_count": len(files)},
-            )
-            self.info(f"Opening {len(files)} {issue_kind} issues in Myriad")
-
-            try:
-                self._run_subprocess(
-                    ["open", "-a", "Myriad"] + [f.file_path for f in files],
-                    "open_all_in_myriad",
-                )
-            except Exception as e:
-                self.notify(f"Error opening Myriad: {e}", severity="error")
-
-        # Show the dialog
-        self.push_screen(
-            IssueTypeSelectionDialog(
-                title="Open in Myriad - Select Issue Type",
-                info=info_text,
-                has_srbd=has_srbd,
-                has_zc=has_zc,
-                has_loop=has_loop,
-                action_prefix="open",
-            ),
-            handle_selection,
-        )
-
-    def action_reveal_in_finder(self) -> None:
-        """Reveal the selected file in Finder."""
-        file_path = self._get_selected_file_path()
-        if not file_path:
-            self.info("No file selected")
-            return
-
-        try:
-            self.logger.info(
-                f"Revealing file in Finder: {file_path.name}",
-                extra={"filepath": file_path},
-            )
-            self._run_subprocess(
-                ["open", "-R", str(file_path)], "reveal_in_finder", file_path
-            )
-            self.info(f"Revealing {file_path.name} in Finder")
-        except Exception as e:
-            self.logger.error(
-                f"Failed to reveal file in Finder: {file_path.name}",
-                extra={"filepath": file_path},
-                exc_info=True,
-            )
-            self.notify(f"Error revealing in Finder: {e}", severity="error")
-
-    # -------------------------------------------------------------------------
-    # Actions - Audio Processor
-    # -------------------------------------------------------------------------
 
     def action_fix_selected(self) -> None:
         """Show dialog to select fix type for the selected file."""
