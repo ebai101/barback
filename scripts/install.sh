@@ -5,16 +5,21 @@ XDG_DATA_HOME="${XDG_DATA_HOME:-$HOME/.local/share}"
 INSTALL_DIR="$XDG_DATA_HOME/barback"
 BIN_DIR="${HOME}/.local/bin"
 VENV_DIR="${INSTALL_DIR}/venv"
-REPO_URL="https://github.com/ebai101/barback.git"
+REPO_URL="git@github.com:ebai101/barback.git"
 
 echo "Starting Barback installation..."
 
-for cmd in git python3; do
-  if ! command -v "$cmd" &>/dev/null; then
-    echo "Error: $cmd is required but not installed."
-    exit 1
-  fi
-done
+if ! command -v git &>/dev/null; then
+  echo "Error: git is required but not installed."
+  exit 1
+fi
+
+if ! command -v uv &>/dev/null; then
+  echo "Installing uv (fast Python package manager)..."
+  curl -LsSf https://astral.sh/uv/install.sh | sh
+
+  export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"
+fi
 
 if [ -d "$INSTALL_DIR" ]; then
   echo "Updating existing installation..."
@@ -25,17 +30,15 @@ else
   git clone --quiet "$REPO_URL" "$INSTALL_DIR"
 fi
 
-echo "Setting up virtual environment..."
-python3 -m venv "$VENV_DIR"
+echo "Setting up virtual environment with Python 3.12..."
+uv venv --python 3.12 "$VENV_DIR"
 
 echo "Installing dependencies..."
-"$VENV_DIR/bin/pip" install --quiet --upgrade pip
-"$VENV_DIR/bin/pip" install --quiet -e "$INSTALL_DIR"
-"$VENV_DIR/bin/pip" install --quiet textual-dev
+uv pip install --python "$VENV_DIR" -e "$INSTALL_DIR"
+uv pip install --python "$VENV_DIR" textual-dev
 
 echo "Copying launcher script to $BIN_DIR/barback..."
 mkdir -p "$BIN_DIR"
-
 cp "$INSTALL_DIR/scripts/launcher.sh" "$BIN_DIR/barback"
 chmod +x "$BIN_DIR/barback"
 

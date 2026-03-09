@@ -4,6 +4,7 @@ set -e
 INSTALL_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/barback"
 VENV_DIR="$INSTALL_DIR/venv"
 UPDATE_STAMP="$INSTALL_DIR/.last_update"
+export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"
 
 DO_UPDATE=false
 FORCE_UPDATE=false
@@ -44,7 +45,11 @@ if [ "$DO_UPDATE" = true ]; then
       echo "Installing new version..."
       git pull origin main --quiet
 
-      "$VENV_DIR/bin/pip" install --quiet -e "$INSTALL_DIR"
+      if command -v uv &>/dev/null; then
+        uv pip install --quiet --python "$VENV_DIR" -e "$INSTALL_DIR"
+      else
+        "$VENV_DIR/bin/pip" install --quiet -e "$INSTALL_DIR"
+      fi
       echo "Update complete."
     elif [ "$FORCE_UPDATE" = true ]; then
       echo "Barback is already up to date."
