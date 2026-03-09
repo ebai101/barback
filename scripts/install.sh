@@ -5,7 +5,7 @@ XDG_DATA_HOME="${XDG_DATA_HOME:-$HOME/.local/share}"
 INSTALL_DIR="$XDG_DATA_HOME/barback"
 BIN_DIR="${HOME}/.local/bin"
 VENV_DIR="${INSTALL_DIR}/venv"
-REPO_URL="https://github.com/username/barback.git"
+REPO_URL="https://github.com/ebai101/barback.git"
 
 echo "Starting Barback installation..."
 
@@ -33,11 +33,11 @@ echo "Installing dependencies..."
 "$VENV_DIR/bin/pip" install --quiet -e "$INSTALL_DIR"
 "$VENV_DIR/bin/pip" install --quiet textual-dev
 
-echo "Symlinking launcher to $BIN_DIR/barback..."
+echo "Copying launcher script to $BIN_DIR/barback..."
 mkdir -p "$BIN_DIR"
 
 cp "$INSTALL_DIR/scripts/launcher.sh" "$BIN_DIR/barback"
 chmod +x "$BIN_DIR/barback"
 
 echo "Installation complete! Ensure $BIN_DIR is in your PATH."
-echo "Run 'barback' to start the application."
+echo "Run 'barback' to start the application, or 'barback --update' to force an update check."
