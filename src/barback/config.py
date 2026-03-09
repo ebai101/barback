@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal
 
+import platformdirs
 from textual.binding import Binding
 
 from barback.util.logger import get_logger
@@ -29,12 +30,12 @@ class BarbackConfig:
     good_dither_path: str | None = None
     log_level: LogLevel = "INFO"
     apps: list[AppConfig] = field(default_factory=list)
-    logger: logging.Logger = get_logger()
 
     @classmethod
     def get_config_path(cls) -> Path:
         """Get the path to the config file."""
-        return Path.home() / ".barback" / "config.toml"
+        config_dir = Path(platformdirs.user_config_dir("barback"))
+        return config_dir / "config.toml"
 
     @classmethod
     def get_default_config_path(cls) -> Path:
@@ -66,6 +67,7 @@ class BarbackConfig:
         Returns:
             BarbackConfig: The loaded or default configuration
         """
+        logger = get_logger()
         config_path = cls.get_config_path()
         config_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -74,9 +76,9 @@ class BarbackConfig:
             try:
                 default_config_path = cls.get_default_config_path()
                 shutil.copy2(default_config_path, config_path)
-                cls.logger.info(f"Created default config at {config_path}")
+                logger.info(f"Created default config at {config_path}")
             except FileNotFoundError as e:
-                cls.logger.error(f"Could not find config.default.toml: {e}")
+                logger.error(f"Could not find config.default.toml: {e}")
 
         # Load and parse config
         try:
@@ -101,19 +103,19 @@ class BarbackConfig:
                 apps=apps,
             )
 
-            cls.logger.info(f"Loaded config from {config_path}")
+            logger.info(f"Loaded config from {config_path}")
             return config
 
         except Exception as e:
-            cls.logger.error(
+            logger.error(
                 f"Failed to load config from {config_path}: {e}", exc_info=True
             )
-            cls.logger.info("Using default configuration")
+            logger.info("Using default configuration")
             return cls()
 
     def get_log_level(self) -> int:
         """Convert log level string to self.logger constant."""
-        return getattr(self.logger, self.log_level.upper(), logging.INFO)
+        return getattr(get_logger(), self.log_level.upper(), logging.INFO)
 
     def generate_app_bindings(self) -> list[Binding]:
         """
@@ -141,7 +143,6 @@ class BarbackConfig:
                 break
 
             key = str(idx % 10)
-            # shift_key = "!@#$%^&*()"[idx - 1]
             shift_key = shift_key_names[idx - 1]
 
             # Regular binding: open selected file

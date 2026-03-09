@@ -4,6 +4,8 @@ from datetime import datetime
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
+import platformdirs
+
 
 class BarbackLogger:
     """Centralized logging for Barback with structured output."""
@@ -47,15 +49,14 @@ class BarbackLogger:
         file_handler.setFormatter(formatter)
         self.logger.addHandler(file_handler)
 
-        self.logger.info("=" * 80)
         self.logger.info(f"Barback logging initialized - logs at: {log_dir}")
-        self.logger.info("=" * 80)
 
     def get_logger(self):
         return self.logger
 
     def get_log_dir(self) -> Path:
-        return Path.home() / ".barback" / "logs"
+        log_dir = Path(platformdirs.user_log_dir("barback"))
+        return log_dir
 
 
 class StructuredFormatter(logging.Formatter):

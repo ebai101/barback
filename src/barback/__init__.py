@@ -7,10 +7,12 @@ from barback.util.logger import get_logger
 
 
 def main() -> None:
-    logger = get_logger()
     config = get_config()
+    logger = get_logger()
 
     logger.setLevel(config.get_log_level())
+    logger.info("=" * 80)
+    logger.info(f"Loaded config from {config.get_config_path()}")
 
     if len(sys.argv) != 2:
         logger.error("Invalid arguments - missing audio directory")

@@ -50,7 +50,7 @@ def process_file_with_validation(filepath: Path) -> AudioDataRow | None:
         af.unload()
 
         if issues:
-            logger.info(
+            logger.debug(
                 f"Validated {filepath.name}: {len(issues)} issue(s) - {', '.join(i.kind for i in issues)}",
                 extra={"filepath": filepath, "issues": len(issues)},
             )
