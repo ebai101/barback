@@ -670,6 +670,31 @@ class Barback(App):
             )
             raise
 
+    def action_reveal_in_finder(self) -> None:
+        file_path = self._get_selected_file_path()
+        if not file_path:
+            self.info("No file selected")
+            return
+
+        try:
+            self.logger.info(
+                "Revealing file in Finder",
+                extra={"filepath": file_path},
+            )
+            self._run_subprocess(
+                ["open", "-R", str(file_path)],
+                "reveal_in_finder",
+                file_path,
+            )
+            self.info(f"Revealing {file_path.name} in Finder")
+        except Exception as e:
+            self.logger.error(
+                f"Failed to reveal file: {file_path.name}",
+                extra={"filepath": file_path},
+                exc_info=True,
+            )
+            self.notify(f"Error revealing file: {e}", severity="error")
+
     def action_fix_selected(self) -> None:
         """Show dialog to select fix type for the selected file."""
         file_path = self._get_selected_file_path()
