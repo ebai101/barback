@@ -1,11 +1,11 @@
 import logging
 import shutil
 import tomllib
-from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal
 
 import platformdirs
+from pydantic import BaseModel, Field, ValidationError
 from textual.binding import Binding
 
 from barback.util.logger import get_logger
@@ -13,8 +13,7 @@ from barback.util.logger import get_logger
 LogLevel = Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
 
 
-@dataclass
-class AppConfig:
+class AppConfig(BaseModel):
     """Configuration for an external application."""
 
     display_name: str
@@ -22,14 +21,27 @@ class AppConfig:
     max_files: int | None = None
 
 
-@dataclass
-class BarbackConfig:
+class SRBDConfig(BaseModel):
+    good_dither_path: str | None = Field(default=None)
+
+
+class MicrofadesConfig(BaseModel):
+    fade_in_duration: int = 35
+    fade_out_duration: int = 90
+
+
+class RepairsConfig(BaseModel):
+    microfades: MicrofadesConfig = Field(default_factory=MicrofadesConfig)
+    sr_bd: SRBDConfig = Field(default_factory=SRBDConfig)
+
+
+class BarbackConfig(BaseModel):
     """Main configuration for Barback."""
 
     theme: str = "tokyonight"
-    good_dither_path: str | None = None
     log_level: LogLevel = "INFO"
-    apps: list[AppConfig] = field(default_factory=list)
+    repairs: RepairsConfig = Field(default_factory=RepairsConfig)
+    apps: list[AppConfig] = Field(default_factory=list)
 
     @classmethod
     def get_config_path(cls) -> Path:
@@ -85,32 +97,21 @@ class BarbackConfig:
             with open(config_path, "rb") as f:
                 data = tomllib.load(f)
 
-            # Parse apps
-            apps = []
-            for app_data in data.get("apps", []):
-                apps.append(
-                    AppConfig(
-                        display_name=app_data["display_name"],
-                        application_name=app_data["application_name"],
-                        max_files=app_data.get("max_files"),
-                    )
-                )
-
-            config = cls(
-                theme=data.get("theme", "tokyo-night"),
-                good_dither_path=data.get("good_dither_path"),
-                log_level=data.get("log_level", "INFO"),
-                apps=apps,
-            )
+            config = cls(**data)
 
             logger.info(f"Loaded config from {config_path}")
             return config
 
-        except Exception as e:
+        except ValidationError as e:
             logger.error(
                 f"Failed to load config from {config_path}: {e}", exc_info=True
             )
             logger.info("Using default configuration")
+            return cls()
+        except Exception as e:
+            logger.error(
+                f"Failed to load config from {config_path}: {e}", exc_info=True
+            )
             return cls()
 
     def get_log_level(self) -> int:

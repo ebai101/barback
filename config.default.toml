@@ -6,13 +6,20 @@
 # This variable just sets which theme is applied on startup.
 theme = "tokyo-night"
 
+# Log verbosity - logs can be found at ~/.barback/logs/barback.log
+# Options: "DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"
+log_level = "INFO"
+
+[repairs.sr_bd]
 # Path to a Goodhertz Good Dither 3 plugin. Can be an AU .component
 # as well. If the plugin is not found, Barback will use TPDF dithering.
 good_dither_path = "/Library/Audio/Plug-Ins/VST3/Ghz Good Dither 3.vst3"
 
-# Log verbosity - logs can be found at ~/.barback/logs/barback.log
-# Options: "DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"
-log_level = "INFO"
+
+[repairs.microfades]
+# Set the length of applied microfades
+fade_in_duration = 35
+fade_out_duration = 90
 
 # Application configurations
 # You can add up to 10 applications for opening audio files
@@ -31,7 +38,6 @@ max_files = 32                                  # RX only supports 32 open files
 [[apps]]
 display_name = "Myriad"
 application_name = "Myriad"
-
 
 # [[apps]]
 # display_name = "TWave"

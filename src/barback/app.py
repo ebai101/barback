@@ -82,7 +82,7 @@ class Barback(App):
             selected_dir=Path(audio_dir),
         )
         self.audio_processor = AudioProcessor(
-            good_dither_path=self.config.good_dither_path
+            good_dither_path=self.config.repairs.sr_bd.good_dither_path
         )
         self.logger = get_logger()
         self.logger.info(f"Barback initialized with directory: {audio_dir}")

@@ -7,10 +7,13 @@ from textual import work
 
 from barback.audio_file import AudioFile
 from barback.audio_processor import AudioProcessor
+from barback.config import get_config
 from barback.state import BarbackState
 from barback.util.logger import get_logger
 from barback.util.messages import ProgressBarAdvance, ProgressBarUpdate
 from barback.util.protocol import BarbackProtocol
+
+config = get_config()
 
 # =============================================================================
 # SR/BD Fix Functions
@@ -126,8 +129,8 @@ async def fix_srbd_all_files(
 def _fix_zc_single_file(
     processor: AudioProcessor,
     af: AudioFile,
-    fadein_samples: int = 35,
-    fadeout_samples: int = 90,
+    fadein_samples: int = config.repairs.microfades.fade_in_duration,
+    fadeout_samples: int = config.repairs.microfades.fade_out_duration,
 ) -> tuple[AudioFile, bool, str]:
     """
     Apply microfades to a single file.
@@ -354,7 +357,7 @@ async def fix_loop_all_files(
 
 
 # =============================================================================
-# Combined Fix Functions (SR/BD + Microfades)
+# Combined Fix Functions
 # =============================================================================
 
 
@@ -364,7 +367,11 @@ def _fix_all_issues_single_file(
 ) -> tuple[AudioFile, bool, str]:
     try:
         processor.fix_srbd(af)
-        processor.apply_microfades(af)
+        processor.apply_microfades(
+            af,
+            config.repairs.microfades.fade_in_duration,
+            config.repairs.microfades.fade_out_duration,
+        )
         processor.fix_loop(af)
         return (af, True, "")
     except Exception as e:

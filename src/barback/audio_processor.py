@@ -128,8 +128,8 @@ class AudioProcessor:
     def apply_microfades(
         self,
         af: AudioFile,
-        fadein_samples: int = 35,
-        fadeout_samples: int = 90,
+        fadein_samples,
+        fadeout_samples,
     ) -> None:
         """
         Apply linear microfades to beginning and end of audio file.
