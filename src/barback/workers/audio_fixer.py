@@ -129,8 +129,8 @@ async def fix_srbd_all_files(
 def _fix_zc_single_file(
     processor: AudioProcessor,
     af: AudioFile,
-    fadein_samples: int = config.repairs.microfades.fade_in_duration,
-    fadeout_samples: int = config.repairs.microfades.fade_out_duration,
+    fade_in_samples: int,
+    fade_out_samples: int,
 ) -> tuple[AudioFile, bool, str]:
     """
     Apply microfades to a single file.
@@ -144,7 +144,7 @@ def _fix_zc_single_file(
         extra={"filepath": af, "operation": "fix_zc"},
     )
     try:
-        processor.apply_microfades(af, fadein_samples, fadeout_samples)
+        processor.apply_microfades(af, fade_in_samples, fade_out_samples)
         duration = (time.time() - start_time) * 1000
         logger.info(
             f"Successfully fixed ZC for: {af.file_path.name} in {duration:.2f}ms",
@@ -178,6 +178,8 @@ async def fix_zc_selected_file(
             _fix_zc_single_file,
             processor,
             af,
+            config.repairs.microfades.fade_in_duration,
+            config.repairs.microfades.fade_out_duration,
         )
 
         if success:
@@ -212,6 +214,8 @@ async def fix_zc_all_files(
                 _fix_zc_single_file,
                 processor,
                 af,
+                config.repairs.microfades.fade_in_duration,
+                config.repairs.microfades.fade_out_duration,
             )
             app.post_message(ProgressBarAdvance(1))
             return result
@@ -240,7 +244,7 @@ async def fix_zc_all_files(
 def _fix_loop_single_file(
     processor: AudioProcessor,
     af: AudioFile,
-    fadeout_samples: int = 90,
+    fade_out_samples: int = config.repairs.microfades.fade_out_duration,
 ) -> tuple[AudioFile, bool, str]:
     """
     Fix a single file's loop length (trim/pad + fade out).
@@ -257,7 +261,7 @@ def _fix_loop_single_file(
         extra={"filepath": af, "operation": "fix_loop"},
     )
     try:
-        note = processor.fix_loop(af, fadeout_samples=fadeout_samples)
+        note = processor.fix_loop(af, fade_out_samples=fade_out_samples)
         duration = (time.time() - start_time) * 1000
 
         if note:
@@ -372,7 +376,9 @@ def _fix_all_issues_single_file(
             config.repairs.microfades.fade_in_duration,
             config.repairs.microfades.fade_out_duration,
         )
-        processor.fix_loop(af)
+        processor.fix_loop(
+            af, fade_out_samples=config.repairs.microfades.fade_out_duration
+        )
         return (af, True, "")
     except Exception as e:
         return (af, False, str(e))

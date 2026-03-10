@@ -81,9 +81,7 @@ class Barback(App):
             audio_dir=Path(audio_dir),
             selected_dir=Path(audio_dir),
         )
-        self.audio_processor = AudioProcessor(
-            good_dither_path=self.config.repairs.sr_bd.good_dither_path
-        )
+        self.audio_processor = AudioProcessor(config=self.config)
         self.logger = get_logger()
         self.logger.info(f"Barback initialized with directory: {audio_dir}")
 
@@ -152,14 +150,18 @@ class Barback(App):
 
         def action_method(self_inner: "Barback") -> None:
             srbd_files = self_inner._get_audiofiles_with_issue_kind("SR/BD")
+            silence_files = self_inner._get_audiofiles_with_issue_kind("Silence")
             zc_files = self_inner._get_audiofiles_with_issue_kind("ZC")
             loop_files = self_inner._get_audiofiles_with_issue_kind("Loop")
+            key_sig_files = self_inner._get_audiofiles_with_issue_kind("Key sig")
 
             has_srbd = len(srbd_files) > 0
+            has_silence = len(silence_files) > 0
             has_zc = len(zc_files) > 0
             has_loop = len(loop_files) > 0
+            has_key_sig = len(key_sig_files) > 0
 
-            if not (has_srbd or has_zc or has_loop):
+            if not (has_srbd or has_silence or has_zc or has_loop or has_key_sig):
                 self_inner.info("No issues found")
                 return
 
@@ -167,10 +169,14 @@ class Barback(App):
             issue_counts = []
             if has_srbd:
                 issue_counts.append(f"{len(srbd_files)} SR/BD")
+            if has_silence:
+                issue_counts.append(f"{len(silence_files)} Silence")
             if has_zc:
                 issue_counts.append(f"{len(zc_files)} ZC")
             if has_loop:
                 issue_counts.append(f"{len(loop_files)} Loop")
+            if has_key_sig:
+                issue_counts.append(f"{len(key_sig_files)} Loop")
             info_text = f"Available: {', '.join(issue_counts)}"
 
             def handle_selection(action: str | None) -> None:
@@ -180,8 +186,10 @@ class Barback(App):
 
                 issue_map = {
                     "open_srbd": ("SR/BD", srbd_files),
+                    "open_silence": ("Silence", silence_files),
                     "open_zc": ("ZC", zc_files),
                     "open_loop": ("Loop", loop_files),
+                    "open_key_sig": ("Key sig", key_sig_files),
                 }
 
                 if action not in issue_map:
@@ -244,8 +252,10 @@ class Barback(App):
                     title=f"Open in {display_name} - Select Issue Type",
                     info=info_text,
                     has_srbd=has_srbd,
+                    has_silence=has_silence,
                     has_zc=has_zc,
                     has_loop=has_loop,
+                    has_key_sig=has_key_sig,
                     action_prefix="open",
                 ),
                 handle_selection,

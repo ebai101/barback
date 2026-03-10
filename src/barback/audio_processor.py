@@ -5,13 +5,17 @@ import numpy as np
 from pedalboard import Pedalboard, load_plugin
 
 from barback.audio_file import AudioFile
+from barback.config import BarbackConfig
 from barback.util.logger import get_logger
 
 
 class AudioProcessor:
-    def __init__(self, good_dither_path: str | None = None):
+    def __init__(self, config: BarbackConfig):
         self.logger = get_logger()
-        self.good_dither = self.load_goodhertz_plugin(good_dither_path)
+        self.config = config
+        self.good_dither = self.load_goodhertz_plugin(
+            self.config.repairs.sr_bd.good_dither_path
+        )
 
     def load_goodhertz_plugin(self, provided_path: str | None):
         """Locate and load Goodhertz Good Dither plugin."""
@@ -128,23 +132,23 @@ class AudioProcessor:
     def apply_microfades(
         self,
         af: AudioFile,
-        fadein_samples,
-        fadeout_samples,
+        fade_in_samples: int,
+        fade_out_samples: int,
     ) -> None:
         """
         Apply linear microfades to beginning and end of audio file.
 
         Args:
             input_path: Source audio file (will be deleted and recreated)
-            fadein_samples: Number of samples for fade in (default: 35)
-            fadeout_samples: Number of samples for fade out (default: 90)
+            fade_in_samples: Number of samples for fade in
+            fade_out_samples: Number of samples for fade out
         """
         self.logger.info(
-            f"Starting microfade application: {af.file_path.name} (in={fadein_samples}, out={fadeout_samples})",
+            f"Starting microfade application: {af.file_path.name} (in={fade_in_samples}, out={fade_out_samples})",
             extra={
                 "filepath": af,
-                "fadein_samples": fadein_samples,
-                "fadeout_samples": fadeout_samples,
+                "fade_in_samples": fade_in_samples,
+                "fade_out_samples": fade_out_samples,
             },
         )
 
@@ -152,24 +156,24 @@ class AudioProcessor:
         is_stereo = af.audio.ndim == 2
 
         self.logger.debug(
-            f"Applying fades: {fadein_samples}s in, {fadeout_samples} out"
+            f"Applying fades: {fade_in_samples}s in, {fade_out_samples} out"
         )
 
         # Apply fade in
-        if fadein_samples > 0:
-            fadein_curve = np.linspace(0, 1, fadein_samples)
+        if fade_in_samples > 0:
+            fade_in_curve = np.linspace(0, 1, fade_in_samples)
             if is_stereo:
-                af.audio[:, :fadein_samples] *= fadein_curve
+                af.audio[:, :fade_in_samples] *= fade_in_curve
             else:
-                af.audio[:, :fadein_samples] *= fadein_curve
+                af.audio[:, :fade_in_samples] *= fade_in_curve
 
         # Apply fade out
-        if fadeout_samples > 0:
-            fadeout_curve = np.linspace(1, 0, fadeout_samples)
+        if fade_out_samples > 0:
+            fade_out_curve = np.linspace(1, 0, fade_out_samples)
             if is_stereo:
-                af.audio[:, -fadeout_samples:] *= fadeout_curve
+                af.audio[:, -fade_out_samples:] *= fade_out_curve
             else:
-                af.audio[-fadeout_samples:] *= fadeout_curve
+                af.audio[-fade_out_samples:] *= fade_out_curve
 
         af.write()
         af.unload()
@@ -205,12 +209,12 @@ class AudioProcessor:
         quantized = np.round(dithered / q_step) * q_step
         return np.clip(quantized, -1.0, 1.0)
 
-    def _apply_fade_out(self, audio: np.ndarray, fadeout_samples: int) -> np.ndarray:
-        if fadeout_samples <= 0:
+    def _apply_fade_out(self, audio: np.ndarray, fade_out_samples: int) -> np.ndarray:
+        if fade_out_samples <= 0:
             return audio
 
         n = int(audio.shape[-1])
-        n_fade = min(fadeout_samples, n)
+        n_fade = min(fade_out_samples, n)
         if n_fade <= 0:
             return audio
 
@@ -228,7 +232,7 @@ class AudioProcessor:
             return np.pad(audio, (0, pad), mode="constant")
         return np.pad(audio, ((0, 0), (0, pad)), mode="constant")
 
-    def fix_loop(self, af: AudioFile, fadeout_samples: int = 90) -> str:
+    def fix_loop(self, af: AudioFile, fade_out_samples: int) -> str:
         """
         Fix small loop length errors by trimming or padding to the nearest integer
         target length (derived from BPM + rounded bars).
@@ -271,10 +275,10 @@ class AudioProcessor:
             if current_samples > target_samples:
                 # Too long: truncate excess samples, then fade out
                 af.audio = af.audio[..., :target_samples]
-                af.audio = self._apply_fade_out(af.audio, fadeout_samples)
+                af.audio = self._apply_fade_out(af.audio, fade_out_samples)
             else:
                 # Too short: fade out first, then pad with silence
-                af.audio = self._apply_fade_out(af.audio, fadeout_samples)
+                af.audio = self._apply_fade_out(af.audio, fade_out_samples)
                 af.audio = self._pad_to_length(af.audio, target_samples)
 
             af.write()

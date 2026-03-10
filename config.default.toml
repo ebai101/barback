@@ -18,8 +18,8 @@ good_dither_path = "/Library/Audio/Plug-Ins/VST3/Ghz Good Dither 3.vst3"
 
 [repairs.microfades]
 # Set the length of applied microfades
-fade_in_duration = 35
-fade_out_duration = 90
+fade_in_duration = 15
+fade_out_duration = 30
 
 # Application configurations
 # You can add up to 10 applications for opening audio files

@@ -25,8 +25,10 @@ class IssueTypeSelectionDialog(ModalScreen[str | None]):
         title: str,
         info: str,
         has_srbd: bool = False,
+        has_silence: bool = False,
         has_zc: bool = False,
         has_loop: bool = False,
+        has_key_sig: bool = False,
         action_prefix: str = "action",  # Used as prefix for the returned option ID
     ) -> None:
         """Initialize the issue type selection dialog.
@@ -43,8 +45,10 @@ class IssueTypeSelectionDialog(ModalScreen[str | None]):
         self.title = title
         self.info = info
         self.has_srbd = has_srbd
+        self.has_silence = has_silence
         self.has_zc = has_zc
         self.has_loop = has_loop
+        self.has_key_sig = has_key_sig
         self.action_prefix = action_prefix
 
     def compose(self) -> ComposeResult:
@@ -58,12 +62,20 @@ class IssueTypeSelectionDialog(ModalScreen[str | None]):
                 options_list.add_option(
                     Option("SR/BD", id=f"{self.action_prefix}_srbd")
                 )
+            if self.has_silence:
+                options_list.add_option(
+                    Option("Silence", id=f"{self.action_prefix}_silence")
+                )
             if self.has_zc:
                 options_list.add_option(
                     Option("ZC (Zero Crossing)", id=f"{self.action_prefix}_zc")
                 )
             if self.has_loop:
                 options_list.add_option(Option("Loop", id=f"{self.action_prefix}_loop"))
+            if self.has_key_sig:
+                options_list.add_option(
+                    Option("Key sig", id=f"{self.action_prefix}_key_sig")
+                )
 
             yield options_list
             yield Footer()
