@@ -9,6 +9,7 @@ dependencies = [
   "pedalboard>=0.9.22",
   "platformdirs>=4.3.6",
   "pydantic>=2.12.5",
+  "resampy>=0.4.3",
   "sounddevice>=0.5.5",
   "textual>=0.85.1",
   "watchfiles>=0.24.0",
