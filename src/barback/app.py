@@ -8,7 +8,6 @@ from textual.app import App
 from textual.binding import Binding
 from textual.containers import Container
 from textual.coordinate import Coordinate
-from textual.events import Key
 from textual.widgets import Footer, Header, Input, ProgressBar, Rule, Static
 
 from barback.audio_file import AudioFile
@@ -349,9 +348,6 @@ class Barback(App):
             table = self.query_one("#table", AudioTable)
             table.focus()
             self.info(f"Search: {self.state.search_query or '(empty)'}")
-
-    def on_key(self, event: Key) -> None:
-        self.logger.debug(event.key)
 
     # -------------------------------------------------------------------------
     # Table Management
