@@ -6,5 +6,6 @@ python.uv_venv_auto = "create|source"
 
 [shell_alias]
 tui = "textual run --dev src/barback/__init__.py"
-web = 'textual serve --dev python src/barback/__init__.py'
+web = 'open http://localhost:8000 && textual serve --dev python src/barback/__init__.py'
 logs = "tail -f ~/Library/Logs/barback/barback.log"
+config = "vim ~/Library/Application\\ Support/barback/config.toml"
