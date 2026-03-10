@@ -1,4 +1,3 @@
-import logging
 import shutil
 import tomllib
 from pathlib import Path
@@ -113,10 +112,6 @@ class BarbackConfig(BaseModel):
                 f"Failed to load config from {config_path}: {e}", exc_info=True
             )
             return cls()
-
-    def get_log_level(self) -> int:
-        """Convert log level string to self.logger constant."""
-        return getattr(get_logger(), self.log_level.upper(), logging.INFO)
 
     def generate_app_bindings(self) -> list[Binding]:
         """

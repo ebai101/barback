@@ -10,7 +10,7 @@ def main() -> None:
     config = get_config()
     logger = get_logger()
 
-    logger.setLevel(config.get_log_level())
+    logger.setLevel(config.log_level)
     logger.info("=" * 80)
     logger.info(f"Loaded config from {config.get_config_path()}")
 
