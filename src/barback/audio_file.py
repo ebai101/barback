@@ -1,11 +1,13 @@
 import os
 import re
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
 import librosa
 import numpy as np
 import soundfile as sf
+from pedalboard.io import AudioFile as PedalboardAF
 
 from barback.util.logger import get_logger
 from barback.util.types import LoopResponse
@@ -58,7 +60,7 @@ class AudioFile:
         del self.audio
         self.loaded = False
 
-    def write(self, sr: int = -1, subtype: str = "") -> None:
+    def write(self, sr: int = -1, subtype: str = "", channels: int = -1) -> None:
         """Writes AudioFile.audio to AudioFile.file_path.
 
         Args:
@@ -75,15 +77,40 @@ class AudioFile:
             sr = int(self.sample_rate)
         if subtype == "":
             subtype = self.bit_depth
+        if channels == -1:
+            channels = self.channels
+
+        subtype_map = {"PCM_16": 16, "PCM_24": 24, "PCM_32": 32}
+        bit_depth = subtype_map.get(subtype, 24)
 
         self.logger.debug(f"Writing audio file... {self.file_path}")
 
-        temp_file = self.file_path.with_suffix(".tmp.wav")
-        sf.write(temp_file, self.audio.T, sr, subtype=subtype)
-        self.file_path.unlink()
-        temp_file.rename(self.file_path)
+        try:
+            with tempfile.NamedTemporaryFile(
+                mode="wb", suffix=".wav", delete=False
+            ) as temp_file:
+                temp_path = Path(temp_file.name)
+                with PedalboardAF(
+                    temp_file.name,
+                    "w",
+                    samplerate=sr,
+                    num_channels=channels,
+                    bit_depth=bit_depth,
+                ) as f:  # ty:ignore[invalid-context-manager, no-matching-overload]
+                    f.write(self.audio)
+                self.logger.debug(f"Wrote audio to temp file at {temp_path}")
+        except Exception as e:
+            self.logger.error(f"Error writing audio file at {self.file_path}: {e}")
 
-        self.logger.info(f"Wrote audio file {self.file_path}")
+        try:
+            temp_path.replace(self.file_path)
+            self.logger.info(
+                f"Wrote audio file {self.file_path} (sr={sr}, bit_depth={bit_depth}, channels={channels})"
+            )
+        except Exception as e:
+            if temp_path.exists():
+                temp_path.unlink()
+            self.logger.error(f"Error replacing audio file at {self.file_path}: {e}")
 
     def __str__(self) -> str:
         return self.file_path.name
@@ -99,6 +126,10 @@ class AudioFile:
     @property
     def bit_depth(self) -> str:
         return str(sf.info(self.file_path).subtype)
+
+    @property
+    def channels(self) -> int:
+        return self.audio.shape[0]
 
     def is_loop(self) -> LoopResponse:
         if not self.loaded:
