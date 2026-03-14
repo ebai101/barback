@@ -1,5 +1,8 @@
+import argparse
 import sys
 from pathlib import Path
+
+import debugpy
 
 from barback.app import Barback
 from barback.config import get_config
@@ -14,12 +17,20 @@ def main() -> None:
     logger.info("=" * 80)
     logger.info(f"Loaded config from {config.get_config_path()}")
 
-    if len(sys.argv) != 2:
-        logger.error("Invalid arguments - missing audio directory")
-        print("Usage: barback <audio_directory>")
-        sys.exit(1)
+    parser = argparse.ArgumentParser(description="Barback - audio QA tool")
+    parser.add_argument("audio_dir", type=str, help="sample pack directory")
+    parser.add_argument(
+        "--debug", action="store_true", help="Enable debugpy on port 5678"
+    )
+    args = parser.parse_args()
 
-    audio_dir = sys.argv[1]
+    if args.debug:
+        print("Starting debugger on port 5678...")
+        debugpy.listen(("localhost", 5678))
+        print("Waiting for debugger to attach...")
+        debugpy.wait_for_client()
+
+    audio_dir = args.audio_dir
     audio_path = Path(audio_dir)
 
     if not audio_path.exists():
