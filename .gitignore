@@ -3,7 +3,6 @@ __pycache__
 *.wav
 testpack/
 /testpack.zip
-.vscode/
 **/.mypy_cache
 **/.pytest_cache
 .venv/
