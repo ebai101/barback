@@ -111,13 +111,12 @@ class AudioProcessor:
         # Apply dithering
         if self.good_dither is not None:
             self.logger.debug(f"Applying Goodhertz dither to {af.file_path.name}")
-            af.audio = self._apply_goodhertz_dither(af.audio, target_sr, target_bits)
+            af.audio = self._apply_goodhertz_dither(af.audio, target_sr)
         else:
             self.logger.debug(f"Applying basic dither to {af.file_path.name}")
             af.audio = self._apply_basic_dither(af.audio, target_bits)
 
-        subtype_map = {16: "PCM_16", 24: "PCM_24", 32: "PCM_32"}
-        af.write(target_sr, subtype_map.get(target_bits, "PCM_24"))
+        af.write(target_sr, target_bits, af.channels)
         af.unload()
 
         self.logger.info(
@@ -175,7 +174,7 @@ class AudioProcessor:
             else:
                 af.audio[-fade_out_samples:] *= fade_out_curve
 
-        af.write()
+        af.write(af.sample_rate, af.bit_depth, af.channels)
         af.unload()
 
         self.logger.info(
@@ -183,9 +182,7 @@ class AudioProcessor:
             extra={"filepath": af.file_path},
         )
 
-    def _apply_goodhertz_dither(
-        self, audio: np.ndarray, sr: int, target_bits: int
-    ) -> np.ndarray:
+    def _apply_goodhertz_dither(self, audio: np.ndarray, sr: int) -> np.ndarray:
         """
         Apply Goodhertz Good Dither plugin.
         Works with both mono and stereo.
@@ -281,7 +278,7 @@ class AudioProcessor:
                 af.audio = self._apply_fade_out(af.audio, fade_out_samples)
                 af.audio = self._pad_to_length(af.audio, target_samples)
 
-            af.write()
+            af.write(af.sample_rate, af.bit_depth, af.channels)
             return ""
 
         finally:

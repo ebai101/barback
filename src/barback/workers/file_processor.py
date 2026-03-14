@@ -32,7 +32,7 @@ def get_valid_audio_files(dirname: Path) -> list[Path]:
     return files
 
 
-def process_file_with_validation(filepath: Path) -> AudioDataRow | None:
+def process_file_with_validation(filepath: Path) -> AudioDataRow:
     """
     Load, validate, and build an AudioDataRow for a single file.
     Returns None if file cannot be processed.
@@ -63,7 +63,7 @@ def process_file_with_validation(filepath: Path) -> AudioDataRow | None:
             file=af,
             duration=af.duration,
             sample_rate=af.sample_rate,
-            bit_depth=af.bit_depth,
+            bit_depth=af.subtype,
             loop=loop_str,
             bpm=loop_resp.bpm,
             bars=loop_resp.num_bars,

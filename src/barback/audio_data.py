@@ -24,9 +24,12 @@ class AudioData:
     def __init__(self) -> None:
         self._data: dict[str, AudioDataRow] = {}
 
-    def add_row(self, row: AudioDataRow) -> None:
+    def add_row(self, row: AudioDataRow | None) -> None:
         """Add a new row to the table."""
-        self._data[str(row.file.file_path)] = row
+        if row:
+            self._data[str(row.file.file_path)] = row
+        else:
+            raise ValueError("Cannot add a None row")
 
     def get_row(self, file: str | Path | AudioFile) -> AudioDataRow | None:
         """Get a row by file path."""

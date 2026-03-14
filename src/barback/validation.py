@@ -29,14 +29,12 @@ def check_format_sr_bd(af: AudioFile) -> List[Issue]:
             )
         )
 
-    if af.bit_depth != "PCM_24":
-        logger.debug(
-            f"SR/BD: {af.file_path.name} - Incorrect bit depth ({af.bit_depth})"
-        )
+    if af.subtype != "PCM_24":
+        logger.debug(f"SR/BD: {af.file_path.name} - Incorrect bit depth ({af.subtype})")
         issues.append(
             Issue(
                 "SR/BD",
-                f"bit depth {af.bit_depth} is incorrect",
+                f"bit depth {af.subtype} is incorrect",
             )
         )
 

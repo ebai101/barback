@@ -60,7 +60,7 @@ class AudioFile:
         del self.audio
         self.loaded = False
 
-    def write(self, sr: int = -1, subtype: str = "", channels: int = -1) -> None:
+    def write(self, sr: int | float, bd: int, channels: int) -> None:
         """Writes AudioFile.audio to AudioFile.file_path.
 
         Args:
@@ -72,16 +72,6 @@ class AudioFile:
                 f"Attempted to write an unloaded audio file: {self.file_path}"
             )
             return
-
-        if sr == -1:
-            sr = int(self.sample_rate)
-        if subtype == "":
-            subtype = self.bit_depth
-        if channels == -1:
-            channels = self.channels
-
-        subtype_map = {"PCM_16": 16, "PCM_24": 24, "PCM_32": 32}
-        bit_depth = subtype_map.get(subtype, 24)
 
         self.logger.debug(f"Writing audio file... {self.file_path}")
 
@@ -95,7 +85,7 @@ class AudioFile:
                     "w",
                     samplerate=sr,
                     num_channels=channels,
-                    bit_depth=bit_depth,
+                    bit_depth=bd,
                 ) as f:  # ty:ignore[invalid-context-manager, no-matching-overload]
                     f.write(self.audio)
                 self.logger.debug(f"Wrote audio to temp file at {temp_path}")
@@ -105,7 +95,7 @@ class AudioFile:
         try:
             temp_path.replace(self.file_path)
             self.logger.info(
-                f"Wrote audio file {self.file_path} (sr={sr}, bit_depth={bit_depth}, channels={channels})"
+                f"Wrote audio file {self.file_path} (sr={sr}, bit_depth={bd}, channels={channels})"
             )
         except Exception as e:
             if temp_path.exists():
@@ -124,12 +114,24 @@ class AudioFile:
         return librosa.get_samplerate(str(self.file_path))
 
     @property
-    def bit_depth(self) -> str:
+    def subtype(self) -> str:
         return str(sf.info(self.file_path).subtype)
 
     @property
+    def bit_depth(self) -> int:
+        subtype_map = {
+            "PCM_U8": 8,
+            "PCM_16": 16,
+            "PCM_24": 24,
+            "PCM_32": 32,
+            "FLOAT": 32,
+            "DOUBLE": 64,
+        }
+        return subtype_map[self.subtype]
+
+    @property
     def channels(self) -> int:
-        return self.audio.shape[0]
+        return self.audio.ndim
 
     def is_loop(self) -> LoopResponse:
         if not self.loaded:
