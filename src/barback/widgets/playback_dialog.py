@@ -157,9 +157,10 @@ class PlaybackDialog(ModalScreen[tuple[bool, str] | None]):
         frames_to_read = min(frames, remaining)
 
         if frames_to_read > 0:
-            outdata[:frames_to_read] = self.audio_data[
-                self.position : self.position + frames_to_read
-            ]
+            outdata[:frames_to_read] = (
+                self.audio_data[self.position : self.position + frames_to_read]
+                * 0.5  # play at -6dB
+            )
             self.position += frames_to_read
 
         # Fill remainder with silence if needed
