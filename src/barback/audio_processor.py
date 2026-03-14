@@ -256,14 +256,12 @@ class AudioProcessor:
 
             current_samples = int(af.audio.shape[-1])
             target_samples = int(resp.target_samples)
-
-            beat_len_samples = float(resp.bar_len_samples) * 0.25
             diff_samples = abs(current_samples - target_samples)
 
-            if diff_samples >= beat_len_samples:
+            if diff_samples >= 100:
                 return (
                     f"Skipped loop fix for {af.file_path.name}: "
-                    f"off by {diff_samples:.0f} samples (>= 1 beat)"
+                    f"off by {diff_samples:.0f} samples (>= 100 samples)"
                 )
 
             if current_samples == target_samples:
@@ -281,5 +279,41 @@ class AudioProcessor:
             af.write(af.sample_rate, af.bit_depth, af.channels)
             return ""
 
+        finally:
+            af.unload()
+
+    def fix_silence(self, af: AudioFile) -> str:
+        """
+        Trim silence from the beginning and end of a one-shot based on validation logic.
+        Returns empty string on success, or a note on why it was skipped.
+        """
+        self.logger.info(
+            f"Starting silence fix: {af.file_path.name}",
+            extra={"filepath": af, "operation": "fix_silence"},
+        )
+
+        af.load()
+        try:
+            start_silence, end_silence = af.get_start_end_silence()
+
+            if start_silence == 0 and end_silence == 0:
+                return (
+                    f"Skipped silence fix for {af.file_path.name}: No silence detected"
+                )
+
+            original_len = af.audio.shape[-1]
+
+            # Trim the start and end by slicing the numpy array
+            if af.channels == 1:
+                af.audio = af.audio[start_silence : original_len - end_silence]
+            else:
+                af.audio = af.audio[:, start_silence : original_len - end_silence]
+
+            self.logger.debug(
+                f"Trimmed {start_silence} from start and {end_silence} from end"
+            )
+
+            af.write(af.sample_rate, af.bit_depth, af.channels)
+            return ""
         finally:
             af.unload()

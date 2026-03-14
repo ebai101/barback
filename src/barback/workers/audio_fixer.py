@@ -361,6 +361,119 @@ async def fix_loop_all_files(
 
 
 # =============================================================================
+# Silence Fix Functions
+# =============================================================================
+
+
+def _fix_silence_single_file(
+    processor: AudioProcessor, af: AudioFile
+) -> tuple[AudioFile, bool, str]:
+    logger = get_logger()
+    start_time = time.time()
+    logger.info(
+        f"Starting Silence fix for: {af.file_path.name}",
+        extra={"filepath": af, "operation": "fix_silence"},
+    )
+    try:
+        note = processor.fix_silence(af)
+        duration = (time.time() - start_time) * 1000
+
+        if note:
+            logger.info(
+                note,
+                extra={
+                    "filepath": af,
+                    "operation": "fix_silence",
+                    "duration": duration,
+                },
+            )
+        else:
+            logger.info(
+                f"Successfully fixed Silence for: {af.file_path.name} in {duration:.2f}ms",
+                extra={
+                    "filepath": af,
+                    "operation": "fix_silence",
+                    "duration": duration,
+                },
+            )
+        return (af, True, note)
+
+    except Exception as e:
+        duration = (time.time() - start_time) * 1000
+        logger.error(
+            f"Failed to fix Silence for: {af.file_path.name} after {duration:.2f}ms",
+            extra={"filepath": af, "operation": "fix_silence", "duration": duration},
+            exc_info=True,
+        )
+        return (af, False, str(e))
+
+
+@work
+async def fix_silence_selected_file(
+    app: BarbackProtocol,
+    state: BarbackState,
+    processor: AudioProcessor,
+    af: AudioFile,
+) -> None:
+    executor = ThreadPoolExecutor(max_workers=1)
+    try:
+        app.info(f"Fixing Silence for {af.file_path.name}...")
+        loop = asyncio.get_event_loop()
+        result_af, success, note = await loop.run_in_executor(
+            executor, _fix_silence_single_file, processor, af
+        )
+
+        if success:
+            if note:
+                app.info(note)
+            else:
+                app.info(f"Fixed Silence: {result_af.file_path.name}")
+        else:
+            app.info(f"Error fixing Silence for {result_af.file_path.name}: {note}")
+    finally:
+        executor.shutdown(wait=True)
+
+
+@work
+async def fix_silence_all_files(
+    app: BarbackProtocol,
+    state: BarbackState,
+    processor: AudioProcessor,
+    afiles: list[AudioFile],
+) -> None:
+    executor = ThreadPoolExecutor(max_workers=cpu_count())
+    try:
+        total = len(afiles)
+        app.post_message(ProgressBarUpdate(total, 0))
+        app.info(f"Fixing Silence for {total} files...")
+
+        async def fix_one(af: AudioFile) -> tuple[AudioFile, bool, str]:
+            loop = asyncio.get_event_loop()
+            result = await loop.run_in_executor(
+                executor, _fix_silence_single_file, processor, af
+            )
+            app.post_message(ProgressBarAdvance(1))
+            return result
+
+        tasks = [fix_one(f) for f in afiles]
+        results = await asyncio.gather(*tasks)
+
+        failed = sum(1 for (_, success, _) in results if not success)
+        skipped = sum(1 for (_, success, note) in results if success and note)
+        fixed = total - failed - skipped
+
+        if failed > 0:
+            app.info(
+                f"Silence fix: {fixed}/{total} fixed ({skipped} skipped, {failed} failed)"
+            )
+        else:
+            app.info(f"Silence fix: {fixed}/{total} fixed ({skipped} skipped)")
+
+    finally:
+        executor.shutdown(wait=True)
+
+
+# =============================================================================
 # Combined Fix Functions
 # =============================================================================
 
@@ -371,13 +484,12 @@ def _fix_all_issues_single_file(
 ) -> tuple[AudioFile, bool, str]:
     try:
         processor.fix_srbd(af)
+        processor.fix_silence(af)
+        processor.fix_loop(af, config.repairs.microfades.fade_out_duration)
         processor.apply_microfades(
             af,
             config.repairs.microfades.fade_in_duration,
             config.repairs.microfades.fade_out_duration,
-        )
-        processor.fix_loop(
-            af, fade_out_samples=config.repairs.microfades.fade_out_duration
         )
         return (af, True, "")
     except Exception as e:

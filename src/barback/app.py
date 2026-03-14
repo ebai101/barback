@@ -30,6 +30,8 @@ from barback.workers.audio_fixer import (
     fix_all_issues_selected_file,
     fix_loop_all_files,
     fix_loop_selected_file,
+    fix_silence_all_files,
+    fix_silence_selected_file,
     fix_srbd_all_files,
     fix_srbd_selected_file,
     fix_zc_all_files,
@@ -330,7 +332,14 @@ class Barback(App):
     def on_data_table_header_selected(self, event: AudioTable.HeaderSelected) -> None:
         """Sort table by the selected column."""
         table = event.data_table
-        table.sort(event.column_key)
+
+        if getattr(self, "current_sort_col", None) == event.column_key:
+            self.current_sort_reverse = not getattr(self, "current_sort_reverse")
+        else:
+            self.current_sort_col = event.column_key
+            self.current_sort_reverse = False
+
+        table.sort(event.column_key, reverse=self.current_sort_reverse)
 
     def on_data_table_row_selected(self, event: AudioTable.RowSelected) -> None:
         """Handle Enter key on table row - open playback dialog."""
@@ -361,7 +370,11 @@ class Barback(App):
         If you want to show all files, remove the filter.
         """
         table = self.query_one("#table", AudioTable)
+
+        selected_path = self._get_selected_file_path()
+        selected_key = str(selected_path) if selected_path else None
         old_cursor_row = table.cursor_row if table.row_count > 0 else 0
+
         table.clear()
 
         if not table.columns:
@@ -417,9 +430,21 @@ class Barback(App):
                 key=str(row.file.file_path),  # Use full path as key for updates
             )
 
+        sort_col = getattr(self, "current_sort_col", None)
+        if sort_col is not None:
+            sort_rev = getattr(self, "current_sort_reverse", False)
+            table.sort(sort_col, reverse=sort_rev)
+
         # Restore cursor position, adjusting if needed
         if table.row_count > 0:
-            new_cursor_row = min(old_cursor_row, table.row_count - 1)
+            new_cursor_row = 0
+            if selected_key:
+                try:
+                    new_cursor_row = table.get_row_index(selected_key)
+                except Exception:
+                    new_cursor_row = min(old_cursor_row, table.row_count - 1)
+            else:
+                new_cursor_row = min(old_cursor_row, table.row_count - 1)
             table.move_cursor(row=new_cursor_row)
 
         total_files = len(self.state.audio_data)
@@ -714,6 +739,7 @@ class Barback(App):
             return
 
         has_srbd = any(i.kind == "SR/BD" for i in (row.issues or []))
+        has_silence = any(i.kind == "Silence" for i in (row.issues or []))
         has_zc = any(i.kind == "ZC" for i in (row.issues or []))
         has_loop = any(i.kind == "Loop" for i in (row.issues or []))
         file_name = file_path.name
@@ -729,6 +755,12 @@ class Barback(App):
                     self.info("Selected file has no SR/BD issues")
                     return
                 fix_srbd_selected_file(self, self.state, self.audio_processor, af)
+
+            elif fix_type == "fix_silence":
+                if not has_silence:
+                    self.info("Selected file has no silence issues")
+                    return
+                fix_silence_selected_file(self, self.state, self.audio_processor, af)
 
             elif fix_type == "fix_zc":
                 if not has_zc:
@@ -751,6 +783,9 @@ class Barback(App):
                 case "SR/BD":
                     handle_fix_selection("fix_srbd")
                     return
+                case "Silence":
+                    handle_fix_selection("fix_silence")
+                    return
                 case "ZC":
                     handle_fix_selection("fix_zc")
                     return
@@ -765,6 +800,7 @@ class Barback(App):
                 is_all=False,
                 file_count=1,
                 has_srbd=has_srbd,
+                has_silence=has_silence,
                 has_zc=has_zc,
                 has_loop=has_loop,
             ),
@@ -775,6 +811,7 @@ class Barback(App):
         """Show dialog to select fix type for all files."""
 
         srbd_files = self._get_audiofiles_with_issue_kind("SR/BD")
+        silence_files = self._get_audiofiles_with_issue_kind("Silence")
         zc_files = self._get_audiofiles_with_issue_kind("ZC")
         loop_files = self._get_audiofiles_with_issue_kind("Loop")
 
@@ -788,6 +825,7 @@ class Barback(App):
             return
 
         has_srbd = len(srbd_files) > 0
+        has_silence = len(silence_files) > 0
         has_zc = len(zc_files) > 0
         has_loop = len(loop_files) > 0
 
@@ -801,6 +839,12 @@ class Barback(App):
                     self.info("No SR/BD issues found")
                     return
                 fix_srbd_all_files(self, self.state, self.audio_processor, srbd_files)
+
+            elif fix_type == "fix_silence":
+                if not silence_files:
+                    self.info("No silence issues found")
+                    return
+                fix_silence_all_files(self, self.state, self.audio_processor, zc_files)
 
             elif fix_type == "fix_zc":
                 if not zc_files:
@@ -824,6 +868,7 @@ class Barback(App):
                 is_all=True,
                 file_count=len(all_files),
                 has_srbd=has_srbd,
+                has_silence=has_silence,
                 has_zc=has_zc,
                 has_loop=has_loop,
             ),
