@@ -42,22 +42,18 @@ def check_format_sr_bd(af: AudioFile) -> List[Issue]:
 
 
 def check_silence(af: AudioFile) -> List[Issue]:
-    """Silence at start/end, with tighter restriction on non‑loops."""
+    """Silence at start/end of one shots"""
     logger = get_logger()
     issues: List[Issue] = []
 
     start, end = af.get_start_end_silence()
 
     name = str(af.file_path)
-    is_loop_like = "loop" in name.lower()
+    if "loop" in name.lower():
+        return []
 
     # Check start
-    if not is_loop_like and start >= 500:
-        logger.debug(f"Silence: {af.file_path.name} - {start} samples at the start")
-        issues.append(
-            Issue("Silence", f"{start} samples at the start"),
-        )
-    elif start >= 22050:
+    if start >= 500:
         logger.debug(f"Silence: {af.file_path.name} - {start} samples at the start")
         issues.append(
             Issue("Silence", f"{start} samples at the start"),
