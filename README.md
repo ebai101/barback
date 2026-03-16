@@ -8,8 +8,8 @@ backing the bars - TUI/Web audio validation and repair tool for sample packs
 
 From there, open a terminal and run barback --web or barback --tui.
 
-
 ## Manual install
+
 ```
 brew install uv
 git clone https://github.com/ebai101/barback.git barback
@@ -21,6 +21,7 @@ uv run barback --web "/path/to/samplepack"
 Loading files can be very slow (30-40s) on the first run after installing, due to librosa JIT compilations that need to run first. subsequent runs should be significantly faster.
 
 The sample pack **should already be named to spec**, using Name Mangler or another similar tool. Barback does not handle batch renaming and relies on proper naming convention and directory structure for some of its checks.
+
 ## Usage
 
 Barback checks for 5 kinds of issues:
@@ -34,10 +35,12 @@ Barback checks for 5 kinds of issues:
 After everything loads you'll see a list of any files in the given folder that have one or many of the issues listed above. You can browse through the files, open them in various applications, preview them, rename, and repair them.
 
 A lot of the functionality is keyboard-based, due to the nature of the Textual framework. There's decent mouse support but it's usually easier to learn the keybinds.
+
 ### Browsing
 
 - h j k l (or arrow keys) to navigate
 - / (slash) to enter search mode. Type in any search term to filter the list by, press enter to continue browsing, press esc to clear the search
+- \` (backtick) to toggle the filetree. Select any directory in the file tree to show only the files in that directory in the list
 - Ctrl-Q to quit
 - Click any column to sort by that column
 - For more guidance, press Ctrl-\ and open the Keys menu to read all available keybinds
@@ -59,9 +62,9 @@ Barback can repair some issues in a given audio file.
 - **SR/BD**: Converts to 44/24. Uses Goodhertz Good Dither 3 if the VST/AU is installed, otherwise TPDF dithering is used
 - **ZC**: Applies microfades to the start and end - 35 sample fade in, 90 sample fade out
 - **Loop**: Truncates/extends the file to match the expected number of samples. This repair will only be done if:
-	- a valid BPM is detected
-	- the file has "loop" in the name
-	- the remainder abs(expected_samples - actual_samples) is less than or equal to 1/4 bar
+  - a valid BPM is detected
+  - the file has "loop" in the name
+  - the remainder abs(expected_samples - actual_samples) is less than or equal to 1/4 bar
 
 Press R to repair the selected file. If multiple issues are present, a dialog will allow you to pick which issue to repair. Additionally, Shift-R will apply the selected fix to all files with issues.
 
