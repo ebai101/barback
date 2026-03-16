@@ -75,10 +75,12 @@ class AudioData:
 
     def filter_by_dir(self, directory: str | Path) -> "AudioData":
         """Return a new table containing only rows where the file is in the specified directory."""
+        directory = Path(directory).resolve()
         new_table = AudioData()
 
         for row in self._data.values():
-            if str(directory) in str(row.file.file_path):
+            file_parent = row.file.file_path.resolve().parent
+            if file_parent == directory or directory in file_parent.parents:
                 new_table.add_row(row)
 
         return new_table

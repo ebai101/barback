@@ -13,3 +13,4 @@ class BarbackState:
     show_all_files: bool = False
     search_mode: bool = False
     search_query: str = ""
+    show_file_tree: bool = False

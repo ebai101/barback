@@ -6,7 +6,7 @@ from typing import Any
 
 from textual.app import App
 from textual.binding import Binding
-from textual.containers import Container
+from textual.containers import Container, Horizontal
 from textual.coordinate import Coordinate
 from textual.widgets import Footer, Header, Input, ProgressBar, Rule, Static
 
@@ -23,6 +23,7 @@ from barback.util.messages import (
 )
 from barback.validation import summarize_issues
 from barback.widgets.audio_table import AudioTable
+from barback.widgets.dir_tree import DirTree
 from barback.widgets.fix_dialog import FixTypeDialog, IssueTypeSelectionDialog
 from barback.widgets.playback_dialog import PlaybackDialog
 from barback.workers.audio_fixer import (
@@ -51,6 +52,12 @@ class Barback(App):
             "toggle_show_all",
             "Toggle All/Issues",
             tooltip="Switch between viewing all files and only those with issues",
+        ),
+        Binding(
+            "`",
+            "toggle_file_tree",
+            "Toggle Filetree",
+            tooltip="Show/hide the filetree sidebar",
         ),
         Binding(
             "r", "fix_selected", "Repair", tooltip="Apply fixes to the selected file"
@@ -279,7 +286,12 @@ class Barback(App):
             id="head",
         )
         yield Rule(line_style="ascii", id="rule")
-        yield Container(
+        yield Horizontal(
+            Container(
+                DirTree(str(self.state.audio_dir), id="dir-tree"),
+                id="file-tree-pane",
+                classes="hidden",
+            ),
             AudioTable(id="table"),
             id="body",
         )
@@ -296,7 +308,7 @@ class Barback(App):
         """Update the info box with status messages."""
         info_box = self.query_one("#info", Static)
         info_box.update(text)
-        self.logger.info(text)
+        self.logger.debug(text)
 
     def update_stats(self, text: str) -> None:
         """Update the stats line with file counts."""
@@ -349,6 +361,7 @@ class Barback(App):
         """Handle search input changes."""
         if event.input.id == "search":
             self.state.search_query = event.value.lower()
+            self.info(f"Search: {self.state.search_query or '(empty)'}")
             self._refresh_table()
 
     def on_input_submitted(self, event: Input.Submitted) -> None:
@@ -357,6 +370,20 @@ class Barback(App):
             table = self.query_one("#table", AudioTable)
             table.focus()
             self.info(f"Search: {self.state.search_query or '(empty)'}")
+
+    def on_directory_tree_directory_selected(
+        self, event: DirTree.DirectorySelected
+    ) -> None:
+        self.state.selected_dir = Path(event.path)
+        self._refresh_table()
+
+        try:
+            relative = self.state.selected_dir.relative_to(self.state.audio_dir)
+            label = str(relative) or "."
+        except ValueError:
+            label = self.state.selected_dir.name
+
+        self.logger.info(f"Filtering files by dir: {label}")
 
     # -------------------------------------------------------------------------
     # Table Management
@@ -556,6 +583,22 @@ class Barback(App):
             self.info("Showing all files")
         else:
             self.info("Showing only files with issues")
+
+    def action_toggle_file_tree(self) -> None:
+        pane = self.query_one("#file-tree-pane", Container)
+        tree = self.query_one("#dir-tree", DirTree)
+        table = self.query_one("#table", AudioTable)
+
+        self.state.show_file_tree = not self.state.show_file_tree
+
+        if self.state.show_file_tree:
+            pane.remove_class("hidden")
+            tree.focus()
+            self.logger.info("Showing file tree")
+        else:
+            pane.add_class("hidden")
+            table.focus()
+            self.logger.info("Hiding file tree")
 
     def action_enter_search_mode(self) -> None:
         """Enter search mode."""
