@@ -100,6 +100,10 @@ class AudioData:
             return True
         return False
 
+    def clear(self) -> None:
+        """Clears the table."""
+        self._data.clear()
+
     def __len__(self) -> int:
         """Return the number of rows in the table."""
         return len(self._data)

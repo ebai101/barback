@@ -60,6 +60,12 @@ class Barback(App):
             tooltip="Show/hide the filetree sidebar",
         ),
         Binding(
+            "s",
+            "rescan_directory",
+            "Rescan",
+            tooltip="Force a full rescan of the directory",
+        ),
+        Binding(
             "r", "fix_selected", "Repair", tooltip="Apply fixes to the selected file"
         ),
         Binding(
@@ -324,7 +330,10 @@ class Barback(App):
         self.state.loaded = True
         progress = self.query_one("#progress", ProgressBar)
         progress.display = False
-        watch_files(self, self.state)
+
+        if not getattr(self, "_watcher_running", False):
+            watch_files(self, self.state)
+            self._watcher_running = True
 
     def on_table_update(self, message: TableUpdate) -> None:
         """Refresh the table whenever data changes."""
@@ -599,6 +608,24 @@ class Barback(App):
             pane.add_class("hidden")
             table.focus()
             self.logger.info("Hiding file tree")
+
+    def action_rescan_directory(self) -> None:
+        """Force a complete rescan of the audio directory."""
+        if not self.state.loaded:
+            self.info("Scan already in progress...")
+            return
+
+        self.info("Rescanning directory...")
+        self.state.loaded = False
+
+        self.state.audio_data.clear()
+        self._refresh_table()
+
+        progress = self.query_one("#progress", ProgressBar)
+        progress.update(total=100, progress=0)
+        progress.display = True
+
+        init_audio_data(self, self.state)
 
     def action_enter_search_mode(self) -> None:
         """Enter search mode."""
