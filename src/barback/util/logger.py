@@ -75,13 +75,12 @@ class StructuredFormatter(logging.Formatter):
         if record.exc_info:
             log_data["exception"] = self.formatException(record.exc_info)
 
-        # Include extra fields if they exist
         if hasattr(record, "filepath"):
             log_data["filepath"] = str(record.filepath)
         if hasattr(record, "operation"):
-            log_data["operation"] = record.operation
+            log_data["operation"] = str(record.operation)
         if hasattr(record, "duration"):
-            log_data["duration"] = record.duration
+            log_data["duration"] = str(record.duration)
 
         return json.dumps(log_data)
 
