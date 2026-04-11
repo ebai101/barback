@@ -54,7 +54,7 @@ class Barback(App):
             tooltip="Switch between viewing all files and only those with issues",
         ),
         Binding(
-            "`",
+            "t",
             "toggle_file_tree",
             "Toggle Filetree",
             tooltip="Show/hide the filetree sidebar",
