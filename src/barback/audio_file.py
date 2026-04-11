@@ -1,4 +1,5 @@
 import re
+import shutil
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
@@ -92,7 +93,7 @@ class AudioFile:
             self.logger.error(f"Error writing audio file at {self.file_path}: {e}")
 
         try:
-            temp_path.replace(self.file_path)
+            shutil.move(temp_path, self.file_path)
             self.logger.info(
                 f"Wrote audio file {self.file_path} (sr={sr}, bit_depth={bd}, channels={channels})"
             )
