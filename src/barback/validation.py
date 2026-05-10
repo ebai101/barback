@@ -4,6 +4,7 @@ import re
 from typing import Iterable, List
 
 from barback.audio_file import AudioFile
+from barback.config import get_config
 from barback.util.logger import get_logger
 from barback.util.types import Issue
 
@@ -176,13 +177,20 @@ def validate_audio_file(af: AudioFile) -> list[Issue]:
     logger.debug(
         f"Starting validation: {af.file_path.name}", extra={"filepath": af.file_path}
     )
+    config = get_config()
 
     issues: list[Issue] = []
-    issues.extend(check_format_sr_bd(af))
-    issues.extend(check_silence(af))
-    issues.extend(check_zero_crossing(af))
-    issues.extend(check_loop(af))
-    issues.extend(check_tonal_loop_key_signature(af))
+    checks: list = [
+        (config.repairs.sr_bd.enabled, check_format_sr_bd),
+        (config.repairs.silence.enabled, check_silence),
+        (config.repairs.microfades.enabled, check_zero_crossing),
+        (config.repairs.loop.enabled, check_loop),
+        (config.repairs.keysig.enabled, check_tonal_loop_key_signature),
+    ]
+
+    for c in checks:
+        if c[0]:
+            issues.extend(c[1](af))
 
     if issues:
         issue_summary = ", ".join(f"{i.kind}" for i in issues)

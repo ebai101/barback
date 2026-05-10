@@ -21,17 +21,34 @@ class AppConfig(BaseModel):
 
 
 class SRBDConfig(BaseModel):
+    enabled: bool = Field(default=True)
     good_dither_path: str | None = Field(default=None)
 
 
+class SilenceConfig(BaseModel):
+    enabled: bool = Field(default=True)
+
+
 class MicrofadesConfig(BaseModel):
+    enabled: bool = Field(default=True)
     fade_in_duration: int = 35
     fade_out_duration: int = 90
 
 
+class LoopConfig(BaseModel):
+    enabled: bool = Field(default=True)
+
+
+class KeysigConfig(BaseModel):
+    enabled: bool = Field(default=True)
+
+
 class RepairsConfig(BaseModel):
-    microfades: MicrofadesConfig = Field(default_factory=MicrofadesConfig)
     sr_bd: SRBDConfig = Field(default_factory=SRBDConfig)
+    silence: SilenceConfig = Field(default_factory=SilenceConfig)
+    microfades: MicrofadesConfig = Field(default_factory=MicrofadesConfig)
+    loop: LoopConfig = Field(default_factory=LoopConfig)
+    keysig: KeysigConfig = Field(default_factory=KeysigConfig)
 
 
 class BarbackConfig(BaseModel):
