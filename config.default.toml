@@ -11,15 +11,25 @@ theme = "tokyo-night"
 log_level = "INFO"
 
 [repairs.sr_bd]
+enabled = true
 # Path to a Goodhertz Good Dither 3 plugin. Can be an AU .component
 # as well. If the plugin is not found, Barback will use TPDF dithering.
 good_dither_path = "/Library/Audio/Plug-Ins/VST3/Ghz Good Dither 3.vst3"
 
+[repairs.silence]
+enabled = true
 
 [repairs.microfades]
+enabled = true
 # Set the length of applied microfades
 fade_in_duration = 15
 fade_out_duration = 30
+
+[repairs.loop]
+enabled = true
+
+[repairs.keysig]
+enabled = true
 
 # Application configurations
 # You can add up to 10 applications for opening audio files
