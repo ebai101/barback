@@ -181,11 +181,10 @@ class AudioFile:
         target_samples = int(round(expected_samples))
         float_diff = abs(total_samples - expected_samples)
 
-        # TODO: should be 1.0 still maybe
-        is_loopable = float_diff < 100.0
+        is_loopable = float_diff < 1.0
 
         if is_loopable:
-            msg = "yes" if not inferred else f"yes (inferred {bpm} bpm"
+            msg = "yes" if not inferred else f"yes (inferred {bpm} bpm)"
             return LoopResponse(
                 self.file_path,
                 True,
