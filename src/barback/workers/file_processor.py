@@ -79,7 +79,7 @@ def process_file_with_validation(filepath: Path) -> AudioDataRow:
         af = AudioFile(filepath)
         return AudioDataRow(
             file=af,
-            issues=[Issue("SR/BD", f"Error: {str(e)}")],
+            issues=[Issue("SR/BD", f"Error: {e!s}")],
         )
 
 

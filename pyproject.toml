@@ -22,7 +22,9 @@ build-backend = "hatchling.build"
 [dependency-groups]
 dev = [
     "debugpy>=1.8.20",
+    "ruff>=0.16.6",
     "textual-dev>=1.8.0",
+    "ty>=0.0.78",
 ]
 
 [project.scripts]

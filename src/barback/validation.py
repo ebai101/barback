@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import re
-from typing import Iterable, List
+from collections.abc import Iterable
 
 from barback.audio_file import AudioFile
 from barback.config import get_config
@@ -9,10 +9,10 @@ from barback.util.logger import get_logger
 from barback.util.types import Issue
 
 
-def check_format_sr_bd(af: AudioFile) -> List[Issue]:
+def check_format_sr_bd(af: AudioFile) -> list[Issue]:
     """44.1 kHz, 24‑bit, .wav only."""
     logger = get_logger()
-    issues: List[Issue] = []
+    issues: list[Issue] = []
 
     ext = af.file_path.suffix.lower()
     if ext != ".wav":
@@ -42,10 +42,10 @@ def check_format_sr_bd(af: AudioFile) -> List[Issue]:
     return issues
 
 
-def check_silence(af: AudioFile) -> List[Issue]:
+def check_silence(af: AudioFile) -> list[Issue]:
     """Silence at start/end of one shots"""
     logger = get_logger()
-    issues: List[Issue] = []
+    issues: list[Issue] = []
 
     start, end = af.get_start_end_silence()
 
@@ -70,10 +70,10 @@ def check_silence(af: AudioFile) -> List[Issue]:
     return issues
 
 
-def check_zero_crossing(af: AudioFile) -> List[Issue]:
+def check_zero_crossing(af: AudioFile) -> list[Issue]:
     """Clicks/pops at start/end."""
     logger = get_logger()
-    issues: List[Issue] = []
+    issues: list[Issue] = []
 
     nonzeros = af.get_start_end_zero_crossing()
     if not nonzeros:
@@ -86,7 +86,7 @@ def check_zero_crossing(af: AudioFile) -> List[Issue]:
     return issues
 
 
-def check_loop(af: AudioFile) -> List[Issue]:
+def check_loop(af: AudioFile) -> list[Issue]:
     """
     Loop validity based on BPM/bars/expected samples.
 
@@ -97,7 +97,7 @@ def check_loop(af: AudioFile) -> List[Issue]:
     - returns (is_loop, message, bpm, num_bars).
     """
     logger = get_logger()
-    issues: List[Issue] = []
+    issues: list[Issue] = []
 
     # If filename does not suggest loop, skip this check
     if "loop" not in str(af.file_path).lower():
@@ -129,10 +129,10 @@ _KEY_SIG_REGEX = re.compile(r"_[A-G][b#]?(maj|min)?")
 _KEY_SIG_AT_END_REGEX = re.compile(r"^.*_[A-G](?:#|b)?(?:maj|min)?(?:\.wav)?$")
 
 
-def check_tonal_loop_key_signature(af: AudioFile) -> List[Issue]:
+def check_tonal_loop_key_signature(af: AudioFile) -> list[Issue]:
     """Tonal loops should have a key signature at the end of the filename."""
     logger = get_logger()
-    issues: List[Issue] = []
+    issues: list[Issue] = []
 
     basename = af.file_path.name
 
@@ -149,17 +149,16 @@ def check_tonal_loop_key_signature(af: AudioFile) -> List[Issue]:
     # Only enforce for loops that are not clearly drums/percussion
     if not any(
         s in str(af.file_path).lower() for s in ("drum", "perc", "hihat", "top")
-    ):
-        if not _KEY_SIG_AT_END_REGEX.match(basename):
-            logger.debug(
-                f"Key sig: {af.file_path.name} - does not have a key signature but is a tonal loop"
+    ) and not _KEY_SIG_AT_END_REGEX.match(basename):
+        logger.debug(
+            f"Key sig: {af.file_path.name} - does not have a key signature but is a tonal loop"
+        )
+        issues.append(
+            Issue(
+                "Key sig",
+                "does not have a key signature but is a tonal loop",
             )
-            issues.append(
-                Issue(
-                    "Key sig",
-                    "does not have a key signature but is a tonal loop",
-                )
-            )
+        )
 
     return issues
 

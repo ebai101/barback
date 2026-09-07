@@ -60,7 +60,7 @@ class AudioFile:
         del self.audio
         self.loaded = False
 
-    def write(self, sr: int | float, bd: int, channels: int) -> None:
+    def write(self, sr: float, bd: int, channels: int) -> None:
         """Writes AudioFile.audio to AudioFile.file_path.
 
         Args:

@@ -355,7 +355,7 @@ class Barback(App):
         table = event.data_table
 
         if getattr(self, "current_sort_col", None) == event.column_key:
-            self.current_sort_reverse = not getattr(self, "current_sort_reverse")
+            self.current_sort_reverse = not self.current_sort_reverse
         else:
             self.current_sort_col = event.column_key
             self.current_sort_reverse = False
