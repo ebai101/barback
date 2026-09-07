@@ -37,12 +37,11 @@ class AudioFile:
             self.logger.debug(
                 f"Loading audio file: {self.file_path.name} (sr={sample_rate}, mono={mono})"
             )
-            self.audio, sr = librosa.load(self.file_path, sr=sample_rate, mono=mono)
+            self.audio, _ = librosa.load(self.file_path, sr=sample_rate, mono=mono)
         except Exception as e:
-            self.logger.error(
+            self.logger.exception(
                 f"Failed to load audio file: {self.file_path.name}",
                 extra={"filepath": self.file_path},
-                exc_info=True,
             )
             raise AudioFileError(
                 f"Unexpected error loading file {self.file_path}: {type(e).__name__}, {e}"
@@ -158,7 +157,7 @@ class AudioFile:
                 test_bpm = (test_bars * 4) / len_minutes
 
                 if 60 <= test_bpm <= 200 and abs(test_bpm - round(test_bpm)) < 0.05:
-                    bpm = int(round(test_bpm))
+                    bpm = round(test_bpm)
                     inferred = True
                     break
 
@@ -178,7 +177,7 @@ class AudioFile:
             return LoopResponse(self.file_path, False, f"file too short for {bpm} bpm")
 
         expected_samples = num_bars_rounded * bar_len_samples
-        target_samples = int(round(expected_samples))
+        target_samples = round(expected_samples)
         float_diff = abs(total_samples - expected_samples)
 
         is_loopable = float_diff < 1.0
@@ -202,9 +201,10 @@ class AudioFile:
             inferred_bpm = (num_bars_rounded * 4) / (
                 total_samples / (self.sample_rate * 60)
             )
-            if 60 <= inferred_bpm <= 299:
-                if abs(inferred_bpm - round(inferred_bpm)) < 0.05:
-                    suggestion_msg += f", suggested bpm: {int(round(inferred_bpm))}"
+            if (60 <= inferred_bpm <= 299) and (
+                abs(inferred_bpm - round(inferred_bpm)) < 0.05
+            ):
+                suggestion_msg += f", suggested bpm: {round(inferred_bpm)}"
 
         return LoopResponse(
             self.file_path,

@@ -64,7 +64,9 @@ class StructuredFormatter(logging.Formatter):
 
     def format(self, record: logging.LogRecord) -> str:
         log_data = {
-            "timestamp": datetime.fromtimestamp(record.created).isoformat(),
+            "timestamp": datetime.fromtimestamp(
+                record.created, tz=datetime.now().astimezone().tzinfo
+            ).isoformat(),
             "level": record.levelname,
             "module": record.module,
             "function": record.funcName,

@@ -44,10 +44,9 @@ def _fix_srbd_single_file(
         return (af, True, "")
     except Exception as e:
         duration = (time.time() - start_time) * 1000
-        logger.error(
+        logger.exception(
             f"Failed to fix SR/BD for: {af.file_path.name} after {duration:.2f}ms",
             extra={"filepath": af, "operation": "fix_srbd", "duration": duration},
-            exc_info=True,
         )
         return (af, False, str(e))
 
@@ -153,10 +152,9 @@ def _fix_zc_single_file(
         return (af, True, "")
     except Exception as e:
         duration = (time.time() - start_time) * 1000
-        logger.error(
+        logger.exception(
             f"Failed to fix ZC for: {af.file_path.name} after {duration:.2f}ms",
             extra={"filepath": af, "operation": "fix_zc", "duration": duration},
-            exc_info=True,
         )
         return (af, False, str(e))
 
@@ -279,10 +277,9 @@ def _fix_loop_single_file(
 
     except Exception as e:
         duration = (time.time() - start_time) * 1000
-        logger.error(
+        logger.exception(
             f"Failed to fix Loop for: {af.file_path.name} after {duration:.2f}ms",
             extra={"filepath": af, "operation": "fix_loop", "duration": duration},
-            exc_info=True,
         )
         return (af, False, str(e))
 
@@ -400,10 +397,9 @@ def _fix_silence_single_file(
 
     except Exception as e:
         duration = (time.time() - start_time) * 1000
-        logger.error(
+        logger.exception(
             f"Failed to fix Silence for: {af.file_path.name} after {duration:.2f}ms",
             extra={"filepath": af, "operation": "fix_silence", "duration": duration},
-            exc_info=True,
         )
         return (af, False, str(e))
 

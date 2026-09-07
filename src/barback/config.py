@@ -118,16 +118,12 @@ class BarbackConfig(BaseModel):
             logger.info(f"Loaded config from {config_path}")
             return config
 
-        except ValidationError as e:
-            logger.error(
-                f"Failed to load config from {config_path}: {e}", exc_info=True
-            )
+        except ValidationError:
+            logger.exception(f"Failed to load config from {config_path}:")
             logger.info("Using default configuration")
             return cls()
-        except Exception as e:
-            logger.error(
-                f"Failed to load config from {config_path}: {e}", exc_info=True
-            )
+        except Exception:
+            logger.exception(f"Failed to load config from {config_path}:")
             return cls()
 
     def generate_app_bindings(self) -> list[Binding]:

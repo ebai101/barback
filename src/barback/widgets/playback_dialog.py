@@ -16,12 +16,12 @@ from barback.util.logger import get_logger
 class PlaybackDialog(ModalScreen[tuple[bool, str] | None]):
     """Dialog for audio playback and file renaming."""
 
-    BINDINGS = [
+    BINDINGS = (
         Binding("escape", "dismiss", "Cancel"),
         Binding("ctrl+p", "toggle_playback", "Play/Pause"),
         Binding("ctrl+l", "toggle_loop", "Toggle Loop"),
         Binding("return", "submit", "Rename"),
-    ]
+    )
 
     def __init__(self, file_path: Path) -> None:
         """Initialize the playback dialog.
@@ -99,7 +99,7 @@ class PlaybackDialog(ModalScreen[tuple[bool, str] | None]):
             self.update_timer = self.set_interval(0.1, self._update_position_display)
 
         except Exception as e:
-            self.logger.error(f"Failed to load audio file: {e}", exc_info=True)
+            self.logger.exception("Failed to load audio file:")
             self.notify(f"Error loading audio: {e}", severity="error")
             self.dismiss(None)
 
@@ -126,7 +126,7 @@ class PlaybackDialog(ModalScreen[tuple[bool, str] | None]):
             self.logger.debug(f"Started playback: {self.file_path.name}")
 
         except Exception as e:
-            self.logger.error(f"Failed to start playback: {e}", exc_info=True)
+            self.logger.exception("Failed to start playback:")
             self.notify(f"Playback error: {e}", severity="error")
 
     def _stop_playback(self) -> None:

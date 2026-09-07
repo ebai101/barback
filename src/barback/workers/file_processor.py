@@ -71,10 +71,9 @@ def process_file_with_validation(filepath: Path) -> AudioDataRow:
             issues=issues,
         )
     except Exception as e:
-        logger.error(
+        logger.exception(
             f"Failed to process file: {filepath.name}",
             extra={"filepath": filepath},
-            exc_info=True,
         )
         af = AudioFile(filepath)
         return AudioDataRow(
@@ -119,7 +118,7 @@ async def init_audio_data(app: BarbackProtocol, state: BarbackState) -> None:
         for row in rows:
             state.audio_data.add_row(row)
 
-        files_with_issues = sum(1 for row in rows if row.issues)
+        files_with_issues = sum(1 for row in rows if row and row.issues)
         logger.info(
             f"Initial scan complete: {len(audio_files)} files indexed, {files_with_issues} with issues",
             extra={

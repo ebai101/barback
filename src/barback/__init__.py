@@ -2,8 +2,6 @@ import argparse
 import sys
 from pathlib import Path
 
-import debugpy
-
 from barback.app import Barback
 from barback.config import get_config
 from barback.util.logger import get_logger
@@ -25,6 +23,8 @@ def main() -> None:
     args = parser.parse_args()
 
     if args.debug:
+        import debugpy
+
         print("Starting debugger on port 5678...")
         debugpy.listen(("localhost", 5678))
         print("Waiting for debugger to attach...")
@@ -50,9 +50,9 @@ def main() -> None:
         app.run()
     except KeyboardInterrupt:
         logger.info("Barback interrupted by user (Ctrl+C)")
-    except Exception as e:
+    except Exception:
         logger.critical("Barback crashed with unhandled exception", exc_info=True)
-        raise e
+        raise
     finally:
         logger.info("Barback shutting down")
 

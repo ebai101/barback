@@ -7,18 +7,16 @@ from textual.widgets.option_list import Option
 
 
 class FixTypeOptionList(OptionList):
-    BINDINGS = [
+    BINDINGS = (
         Binding("j", "cursor_down", "Cursor down", show=False),
         Binding("k", "cursor_up", "Cursor up", show=False),
-    ]
+    )
 
 
 class IssueTypeSelectionDialog(ModalScreen[str | None]):
     """Generic dialog for selecting an issue type for various operations."""
 
-    BINDINGS = [
-        Binding("escape", "dismiss", "Cancel"),
-    ]
+    BINDINGS = (Binding("escape", "dismiss", "Cancel"),)
 
     def __init__(
         self,
@@ -95,7 +93,7 @@ class IssueTypeSelectionDialog(ModalScreen[str | None]):
 class FixTypeDialog(IssueTypeSelectionDialog):
     """Dialog for selecting which fix type to apply."""
 
-    BINDINGS = [Binding("escape", "dismiss", "Cancel")]
+    BINDINGS = (Binding("escape", "dismiss", "Cancel"),)
 
     def __init__(
         self,

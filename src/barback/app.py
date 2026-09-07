@@ -10,6 +10,7 @@ from textual.containers import Container, Horizontal
 from textual.coordinate import Coordinate
 from textual.widgets import Footer, Header, Input, ProgressBar, Rule, Static
 
+from barback.audio_data import AudioData
 from barback.audio_file import AudioFile
 from barback.audio_processor import AudioProcessor
 from barback.config import get_config
@@ -46,7 +47,7 @@ class Barback(App):
     CSS_PATH = "barback.tcss"
     COMMAND_PALETTE_BINDING = "ctrl+backslash"
 
-    BINDINGS = [
+    BINDINGS = (
         Binding(
             "a",
             "toggle_show_all",
@@ -86,7 +87,7 @@ class Barback(App):
             tooltip="Filter files by search term",
         ),
         Binding("escape", "exit_search_mode", "Exit Search", show=False, system=True),
-    ]
+    )
 
     def __init__(self, audio_dir: str) -> None:
         super().__init__()
@@ -94,6 +95,7 @@ class Barback(App):
         self.state = BarbackState(
             audio_dir=Path(audio_dir),
             selected_dir=Path(audio_dir),
+            audio_data=AudioData(),
         )
         self.audio_processor = AudioProcessor(config=self.config)
         self.logger = get_logger()
@@ -144,10 +146,9 @@ class Barback(App):
                 )
                 self_inner.info(f"Opening {file_path.name} in {display_name}")
             except Exception as e:
-                self_inner.logger.error(
+                self_inner.logger.exception(
                     f"Failed to open file in {display_name}: {file_path.name}",
                     extra={"filepath": file_path},
-                    exc_info=True,
                 )
                 self_inner.notify(
                     f"Error opening {display_name}: {e}", severity="error"
@@ -555,13 +556,12 @@ class Barback(App):
         """Get all files that have issues of the specified kind."""
         files = []
         for row in self.state.audio_data:
-            if row.issues:
-                if any(issue.kind == issue_kind for issue in row.issues):
-                    if self.state.search_mode and self.state.search_query:
-                        if self.state.search_query in row.file.file_path.name.lower():
-                            files.append(row.file)
-                    else:
+            if row.issues and any(issue.kind == issue_kind for issue in row.issues):
+                if self.state.search_mode and self.state.search_query:
+                    if self.state.search_query in row.file.file_path.name.lower():
                         files.append(row.file)
+                else:
+                    files.append(row.file)
         return files
 
     # -------------------------------------------------------------------------
@@ -697,10 +697,9 @@ class Barback(App):
                     # The file watcher should handle table updates automatically
 
                 except Exception as e:
-                    self.logger.error(
+                    self.logger.exception(
                         f"Failed to rename file: {file_path.name}",
                         extra={"filepath": file_path},
-                        exc_info=True,
                     )
                     self.notify(f"Error renaming file: {e}", severity="error")
             else:
@@ -760,14 +759,13 @@ class Barback(App):
             stderr_thread.start()
 
         except Exception:
-            self.logger.error(
+            self.logger.exception(
                 f"Failed to start subprocess: {operation}",
                 extra={
                     "filepath": filepath,
                     "operation": operation,
                     "command": command,
                 },
-                exc_info=True,
             )
             raise
 
@@ -789,10 +787,9 @@ class Barback(App):
             )
             self.info(f"Revealing {file_path.name} in Finder")
         except Exception as e:
-            self.logger.error(
+            self.logger.exception(
                 f"Failed to reveal file: {file_path.name}",
                 extra={"filepath": file_path},
-                exc_info=True,
             )
             self.notify(f"Error revealing file: {e}", severity="error")
 
