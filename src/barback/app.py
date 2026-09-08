@@ -9,6 +9,7 @@ from textual.binding import Binding
 from textual.containers import Container, Horizontal
 from textual.coordinate import Coordinate
 from textual.widgets import Footer, Header, Input, ProgressBar, Rule, Static
+from textual.widgets.data_table import CellDoesNotExist, RowDoesNotExist
 
 from barback.audio_data import AudioData
 from barback.audio_file import AudioFile
@@ -41,6 +42,10 @@ from barback.workers.audio_fixer import (
 )
 from barback.workers.file_processor import init_audio_data
 from barback.workers.file_watcher import watch_files
+
+
+class ExternalApplicationError(RuntimeError):
+    """Configured external application could not be launched."""
 
 
 class Barback(App):
@@ -256,7 +261,7 @@ class Barback(App):
                         ["open", "-a", app_name] + [str(f.file_path) for f in files],
                         f"open_all_in_{action_base}",
                     )
-                except Exception as e:
+                except ExternalApplicationError as e:
                     self_inner.notify(
                         f"Error opening {display_name}: {e}", severity="error"
                     )
@@ -326,7 +331,7 @@ class Barback(App):
     # Message Handlers
     # -------------------------------------------------------------------------
 
-    def on_barback_loaded(self, message: BarbackLoaded) -> None:
+    def on_barback_loaded(self, _: BarbackLoaded) -> None:
         """Called when initial scan completes."""
         self.state.loaded = True
         progress = self.query_one("#progress", ProgressBar)
@@ -336,7 +341,7 @@ class Barback(App):
             watch_files(self, self.state)
             self._watcher_running = True
 
-    def on_table_update(self, message: TableUpdate) -> None:
+    def on_table_update(self, _: TableUpdate) -> None:
         """Refresh the table whenever data changes."""
         self._refresh_table()
 
@@ -363,7 +368,7 @@ class Barback(App):
 
         table.sort(event.column_key, reverse=self.current_sort_reverse)
 
-    def on_data_table_row_selected(self, event: AudioTable.RowSelected) -> None:
+    def on_data_table_row_selected(self, _: AudioTable.RowSelected) -> None:
         """Handle Enter key on table row - open playback dialog."""
         self.action_playback_rename()
 
@@ -474,11 +479,10 @@ class Barback(App):
 
         # Restore cursor position, adjusting if needed
         if table.row_count > 0:
-            new_cursor_row = 0
             if selected_key:
                 try:
                     new_cursor_row = table.get_row_index(selected_key)
-                except Exception:
+                except RowDoesNotExist:
                     new_cursor_row = min(old_cursor_row, table.row_count - 1)
             else:
                 new_cursor_row = min(old_cursor_row, table.row_count - 1)
@@ -535,7 +539,7 @@ class Barback(App):
                 if row.file.file_path.name == filename:
                     return row.file.file_path
 
-        except Exception as e:
+        except CellDoesNotExist as e:
             self.notify(f"Error getting file path: {e}", severity="error")
 
         return None
@@ -767,7 +771,7 @@ class Barback(App):
                     "command": command,
                 },
             )
-            raise
+            raise ExternalApplicationError
 
     def action_reveal_in_finder(self) -> None:
         file_path = self._get_selected_file_path()
