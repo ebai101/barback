@@ -7,6 +7,5 @@ testpack/
 **/.pytest_cache
 .venv/
 .python-version
-uv.lock
 .coverage*
-/repomix-output.txt
+/repomix-output.xml
