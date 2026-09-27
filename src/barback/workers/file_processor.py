@@ -44,7 +44,7 @@ def process_file_with_validation(filepath: Path) -> AudioDataRow:
         af = AudioFile(filepath)
         af.load(mono=True)
         issues = validate_audio_file(af)
-        loop_resp = af.is_loop()
+        loop_resp = af.is_loop(allow_inference=("loop" in str(filepath.absolute())))
         loop_str = "Yes" if loop_resp.is_loop else "No"
         zc_status = af.get_start_end_zero_crossing()
         af.unload()

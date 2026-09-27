@@ -18,6 +18,9 @@ class AudioFileError(Exception):
     message: str
 
 
+_BPM_IN_FILENAME = re.compile(r"^(?:.*?_)?[A-Z]+[A-Z][a-zA-Z]*_(\d+)(?:_.*)?$")
+
+
 class AudioFile:
     def __init__(self, file_path: Path):
         self.file_path: Path = Path(file_path)
@@ -132,90 +135,58 @@ class AudioFile:
     def channels(self) -> int:
         return self.audio.ndim
 
-    def is_loop(self) -> LoopResponse:
+    def is_loop(self, *, allow_inference: bool = True) -> LoopResponse:
         if not self.loaded:
             raise AudioFileError(f"{self.file_path} is not loaded")
 
         total_samples = int(self.audio.shape[-1])
-        bpm = None
-
-        # Find BPM - return early if no valid BPM found
-        bpm_regex = r"^(?:.*?_)?[A-Z]+[A-Z][a-zA-Z]*_(\d+)(?:_.*)?$"
-        bpm_match = re.match(bpm_regex, self.file_path.name)
-        if bpm_match:
-            number = int(bpm_match.group(1))
-            if 60 <= number <= 299:
-                bpm = number
-
-        # If BPM is not found in filename, try to infer it from file length
+        bpm = self._extract_filename_bpm()
         inferred = False
+
+        if bpm is None and allow_inference:
+            bpm = self._infer_loop_bpm(total_samples)
+            inferred = bpm is not None
+
         if bpm is None:
-            for test_bars in [1, 2, 4, 8, 16, 32, 64]:
-                len_minutes = total_samples / (self.sample_rate * 60)
-                if len_minutes == 0:
-                    continue
-                test_bpm = (test_bars * 4) / len_minutes
+            return LoopResponse(
+                file_path=self.file_path,
+                is_loop=False,
+                response="no BPM found in filename or inferred from length",
+            )
 
-                if 60 <= test_bpm <= 200 and abs(test_bpm - round(test_bpm)) < 0.05:
-                    bpm = round(test_bpm)
-                    inferred = True
-                    break
-
-            if bpm is None:
-                return LoopResponse(
-                    self.file_path,
-                    False,
-                    "no bpm found in name or inferred from length",
-                )
-
-        # Calculate samples/bar (assuming 4 beats/bar) and number of bars
         bar_len_samples = (self.sample_rate * 60 / bpm) * 4.0
         num_bars = total_samples / bar_len_samples
-        num_bars_rounded = round(num_bars)
+        rounded_bars = round(num_bars)
 
-        if num_bars_rounded == 0:
-            return LoopResponse(self.file_path, False, f"file too short for {bpm} bpm")
-
-        expected_samples = num_bars_rounded * bar_len_samples
-        target_samples = round(expected_samples)
-        float_diff = abs(total_samples - expected_samples)
-
-        is_loopable = float_diff < 1.0
-
-        if is_loopable:
-            msg = "yes" if not inferred else f"yes (inferred {bpm} bpm)"
+        if rounded_bars == 0:
             return LoopResponse(
-                self.file_path,
-                True,
-                msg,
-                bpm,
-                num_bars_rounded,
-                bar_len_samples=bar_len_samples,
-                expected_samples=expected_samples,
-                target_samples=target_samples,
-                sample_diff=float_diff,
+                file_path=self.file_path,
+                is_loop=False,
+                response=f"file too short for {bpm} BPM",
             )
 
-        suggestion_msg = f"off by {float_diff:.2f} samples"
-        if not inferred:
-            inferred_bpm = (num_bars_rounded * 4) / (
-                total_samples / (self.sample_rate * 60)
-            )
-            if (60 <= inferred_bpm <= 299) and (
-                abs(inferred_bpm - round(inferred_bpm)) < 0.05
-            ):
-                suggestion_msg += f", suggested bpm: {round(inferred_bpm)}"
+        expected_samples = rounded_bars * bar_len_samples
+        sample_diff = abs(total_samples - expected_samples)
 
+        if sample_diff >= 1.0:
+            return LoopResponse(
+                file_path=self.file_path,
+                is_loop=False,
+                response=f"off by {sample_diff:.2f} samples",
+                # Deliberately omit bpm and num_bars.
+            )
+
+        source = f"inferred {bpm} BPM" if inferred else f"{bpm} BPM from filename"
         return LoopResponse(
-            self.file_path,
-            False,
-            suggestion_msg,
-            bpm,
-            num_bars_rounded,
+            file_path=self.file_path,
+            is_loop=True,
+            response=f"yes ({source})",
+            bpm=bpm,
+            num_bars=rounded_bars,
             bar_len_samples=bar_len_samples,
             expected_samples=expected_samples,
-            target_samples=target_samples,
-            sample_diff=float_diff,
+            target_samples=round(expected_samples),
+            sample_diff=sample_diff,
         )
 
     def get_start_end_zero_crossing(self, threshold: float = 0.02) -> str:
@@ -255,3 +226,26 @@ class AudioFile:
             start, end = 0, len(audio_mono)
 
         return start, end
+
+    def _extract_filename_bpm(self) -> int | None:
+        match = _BPM_IN_FILENAME.match(self.file_path.name)
+        if match is None:
+            return None
+
+        bpm = int(match.group(1))
+        return bpm if 60 <= bpm <= 299 else None
+
+    def _infer_loop_bpm(self, total_samples: int) -> int | None:
+        duration_minutes = total_samples / (self.sample_rate * 60)
+        if duration_minutes <= 0:
+            return None
+
+        for bars in (1, 2, 4, 8, 16, 32, 64):
+            candidate_bpm = (bars * 4) / duration_minutes
+            if (
+                60 <= candidate_bpm <= 200
+                and abs(candidate_bpm - round(candidate_bpm)) < 0.05
+            ):
+                return round(candidate_bpm)
+
+        return None
